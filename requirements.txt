@@ -1,0 +1,13 @@
+pandas
+matplotlib
+datasets
+sentence-transformers
+transformers
+numpy
+torch
+openai
+matplotlib
+jupyterlab
+ipykernel
+bert-score
+vllm
