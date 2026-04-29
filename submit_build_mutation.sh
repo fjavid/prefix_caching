@@ -7,18 +7,22 @@
 
 set -euo pipefail
 
-module load python/3.12
+module --force purge
+module load StdEnv/2023
+module load gcc/12.3 arrow/24.0.0 opencv/4.13 python/3.12
 
-PROJECT_ROOT="$PROJECT/prefix_caching"
+PROJECT_ROOT="$HOME/work/prefix_caching"
 SCRATCH_ROOT="$SCRATCH/prefix_caching"
 
-source "$PROJECT_ROOT/env/bin/activate"
+source "$PROJECT_ROOT/.venv/bin/activate"
 
 export HF_HOME="$PROJECT_ROOT/hf_cache"
 export TRANSFORMERS_CACHE="$PROJECT_ROOT/hf_cache"
 export HF_DATASETS_CACHE="$PROJECT_ROOT/hf_cache/datasets"
 
-cd "$PROJECT_ROOT/repo_root"
+mkdir -p "$SCRATCH_ROOT"/{processed,mutation}
+
+cd "$PROJECT_ROOT"
 
 python prompt_mutation/build_mutation_dataset.py \
   --workload rag \

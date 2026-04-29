@@ -7,13 +7,17 @@
 
 set -euo pipefail
 
-module load python/3.12
+module --force purge
+module load StdEnv/2023
+module load gcc/12.3 arrow/24.0.0 opencv/4.13 python/3.12
 
-PROJECT_ROOT="$PROJECT/prefix_caching"
+PROJECT_ROOT="$HOME/work/prefix_caching"
 SCRATCH_ROOT="$SCRATCH/prefix_caching"
 
-source "$PROJECT_ROOT/env/bin/activate"
-cd "$PROJECT_ROOT/repo_root"
+source "$PROJECT_ROOT/.venv/bin/activate"
+cd "$PROJECT_ROOT"
+
+mkdir -p "$SCRATCH_ROOT/prompt_organization"
 
 INPUT_JSONL="$SCRATCH_ROOT/mutation/rag/meaning_preserving/algorithmic/chunk_reorder/<your_file>.jsonl"
 
