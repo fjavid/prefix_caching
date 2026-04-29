@@ -7,7 +7,7 @@ numpy
 torch
 openai
 matplotlib
-jupyterlab
-ipykernel
-bert-score
+# jupyterlab
+# ipykernel
+# bert-score
 vllm
