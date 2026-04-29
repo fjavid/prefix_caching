@@ -2,6 +2,7 @@
 set -euo pipefail
 
 module load python/3.11
+module load gcc opencv/4.9.0
 
 PROJECT_ROOT="$HOME/work/prefix_caching"
 SCRATCH_ROOT="$SCRATCH/prefix_caching"
