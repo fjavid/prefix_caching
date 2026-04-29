@@ -2,7 +2,7 @@
 set -euo pipefail
 
 module --force purge
-module load gcc python/3.12 opencv/4.13 arrow/24.0.0
+module load gcc arrow/24.0.0 opencv/4.13 python/3.12
 
 PROJECT_ROOT="$HOME/work/prefix_caching"
 SCRATCH_ROOT="$SCRATCH/prefix_caching"
