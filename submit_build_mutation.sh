@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-module load python/3.11
+module load python/3.12
 
 PROJECT_ROOT="$PROJECT/prefix_caching"
 SCRATCH_ROOT="$SCRATCH/prefix_caching"
