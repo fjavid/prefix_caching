@@ -8,7 +8,7 @@ module load gcc/12.3 arrow/24.0.0 opencv/4.13 python/3.12
 PROJECT_ROOT="$HOME/work/prefix_caching"
 SCRATCH_ROOT="$SCRATCH/prefix_caching"
 
-mkdir -p "$PROJECT_ROOT"/{env_base,wheelhouse,hf_cache,raw_data}
+mkdir -p "$PROJECT_ROOT"/{wheelhouse,hf_cache,raw_data}
 mkdir -p "$SCRATCH_ROOT"/{processed,mutation,prompt_organization,benchmark_results,analysis}
 
 virtualenv --no-download "$PROJECT_ROOT/.venv"
