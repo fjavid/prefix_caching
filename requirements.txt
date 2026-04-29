@@ -1,12 +1,12 @@
-pandas
-matplotlib
+#pandas
+#matplotlib
 datasets
 sentence-transformers
 transformers
-numpy
+#numpy
 torch
-openai
-matplotlib
+#openai
+#matplotlib
 # jupyterlab
 # ipykernel
 # bert-score
