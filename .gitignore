@@ -10,3 +10,4 @@ inference_benchmark/__pycache__/
 __pycache__/
 hf_cache/
 wheelhouse/
+frozen-requirements.txt
