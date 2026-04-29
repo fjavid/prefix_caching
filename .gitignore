@@ -8,3 +8,5 @@ prompt_organization/__pycache__/
 analysis/__pycache__/
 inference_benchmark/__pycache__/
 __pycache__/
+hf_cache/
+wheelhouse/
