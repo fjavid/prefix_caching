@@ -1,11 +1,20 @@
 #!/bin/bash
-#SBATCH --account=def-someuser
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=16G
-#SBATCH --time=01:00:00
+#SBATCH --account=def-mmehride
+#SBATCH --job-name=build_mutation
 #SBATCH --output=%x-%j.out
+#SBATCH --error=%x-%j.err
+#SBATCH --time=00:30:00
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
 
 set -euo pipefail
+
+# # Robust scratch dir
+# SCRATCH_DIR="${SLURM_TMPDIR:-${TMPDIR:-/tmp/$USER/$SLURM_JOB_ID}}"
+# mkdir -p "$SCRATCH_DIR"
+# echo "SCRATCH_DIR=$SCRATCH_DIR"
+
 
 module --force purge
 module load StdEnv/2023
