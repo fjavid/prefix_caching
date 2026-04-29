@@ -1,60 +1,112 @@
-# Prefix caching under realistic chat workloads
+# Prefix Caching Under Realistic Prompt Mutations
+
+## Goal
 Build a workload-centric benchmark for LLM serving that measures how prefix caching degrades under realistic prompt mutations, identifies which mutation patterns are most harmful, and quantifies how much TTFT can be recovered through better prompt organization alone.
 
-Prefix caching reuses precomputed KV caches for repeated prompt prefixes, reducing latency, cost, and especially time to first token (TTFT). Modern inference platforms such as vLLM, TensorRT-LLM, and SGLang emphasize prefix and cache reuse because repeated prompt structure is common in practice. However, reuse becomes much less straightforward when prompts are only partially identical. In this project, we study prefix caching under partial prompt overlap in workloads such as agent pipelines, RAG systems, multi-turn chat, and scientific reasoning. We aim to measure how different overlap patterns affect TTFT, end-to-end latency, throughput, GPU memory usage, and output correctness, and to identify when partial reuse becomes ineffective or leads to degraded generations. We also aim to design simple prompt-layout strategies that improve TTFT and throughput for partially overlapping prompts.
+Prefix caching reuses precomputed KV caches for repeated prompt prefixes, reducing latency, cost, and especially time to first token (TTFT). Modern inference platforms such as vLLM, TensorRT-LLM, and SGLang emphasize prefix and cache reuse because repeated prompt structure is common in practice. However, reuse becomes much less straightforward when prompts are only partially identical. This project studies prefix caching under partial prompt overlap in workloads such as RAG pipelines, multi-turn chat, agent-style workflows, and structured scientific reasoning. The benchmark aims to measure how overlap patterns affect TTFT, end-to-end latency, throughput, GPU memory usage, and output correctness, and to identify when partial reuse becomes ineffective or harmful. It also aims to design simple prompt-layout strategies that improve TTFT and throughput for partially overlapping prompts.
 
+## Problem framing
+Standard prefix caching works well for exact shared prefixes, but real prompts often differ in small yet important ways. The key question is not only whether prompts overlap, but whether the overlap is semantically irrelevant, semantically meaningful, or positioned too late in the prompt to be useful. This project therefore studies where cacheability breaks, why it breaks, and which prompt-layout choices preserve reusable prefill work without requiring more advanced cache-composition methods.
 
-## Problem framing:
-Standard prefix caching works well for exact shared prefixes, but real prompts in chat, RAG, agents, and structured workflows often differ in small but important ways. This project studies where cacheability breaks, why it breaks, and which prompt-layout choices preserve reusable prefill work without requiring more advanced cache-composition methods.
+## Workloads
+The first version of the benchmark focuses on two workload families:
+- **RAG-style prompts**, where the prompt contains a system instruction, user query, and retrieved context chunks.
+- **Structured scientific prompts**, where the prompt contains a problem description, equation or task description, parameters, grid settings, constraints, and output schema.
 
-## Steps
-1. Define the workload and mutation taxonomy
-We focus on RAG-style prompts, and structured scientific prompts. For each case, we define controlled mutation types and study the effect of each mutation type and value on the prefix caching. In addition we classify the prompt mutation into two categories, 
-1) Class A: meaning-preserving mutations: 
-These are prompts that are different at the token level but are intended to produce the same answer or essentially the same answer. This includes misspelling, paraphrasing, rewording, formatting changes, and chunk reorder when the information content is unchanged.
+These two families are intentionally different. RAG workloads stress document order, retrieval changes, and query variation, while scientific workloads stress parameter variation, units, constraints, and structured prompt fields.
 
-2) Class B: meaning-changing mutations: 
-These are prompts that legitimately ask for a different answer. This includes changing units, changing parameters, changing retrieved evidence, changing dates like “today” vs “tomorrow,” or changing boundary conditions in scientific prompts.
+## Mutation taxonomy
+Prompt mutations are divided into two semantic classes.
 
-Class A (meaning-preserving) category tells us how fragile prefix caching is to harmless irrelevant and semantically identical changes while Class B (meaning-changing) category can tell us how prefix caching behaves when prompts share the same structure but are semantically different. The general consensus for meaning-preserving mutations is to have high cache resuse with identical or equivalent outputs. Any output degaradation should be treated as a negative point. For meaning-changing mutations, the idea is to reuse cache if possible but the output is supposed to be different, hence the correctness of the results should be evaluated based on the mutated prompt. 
+### 1. Meaning-preserving mutations
+These mutations change the form of the prompt while preserving the intended answer.
+Examples include:
+- typo or noise injection
+- formatting changes
+- template rewrites
+- rewording or paraphrasing
+- synonym substitution
+- chunk reorder in RAG
+- field reorder in scientific prompts
+- boilerplate or instruction-style variation
 
-For meaning-preserving mutations, use techniques that change form but not intent:
+These mutations test how fragile prefix caching is to harmless prompt variation. The expected behavior is high cache reuse with equivalent or near-equivalent outputs.
 
-typo/noise injection: small misspellings, dropped punctuation, spacing changes
-formatting changes: bullets vs paragraph, section headers, JSON-style labels, extra separators
-template rewrites: “Answer briefly” → “Provide a concise response”
-query rewording: same question with different wording
-sentence-level paraphrase: rewrite one instruction or one context chunk without changing content
-chunk reorder: reorder retrieved chunks when order should not matter
-field reorder in scientific prompts: parameters before equation, or constraints before grid
-synonym substitution: replace local words with close synonyms
-boilerplate variation: change the assistant role text or output instruction wording while preserving task
+### 2. Meaning-changing mutations
+These mutations legitimately change what the prompt is asking for.
+Examples include:
+- parameter change
+- unit change
+- date or time change
+- retrieved-chunk replacement or insertion
+- query target change
+- constraint change
+- grid or resolution change
+- logical polarity changes such as negation flips, agreement flips, or positive/negative direction changes
 
-For meaning-changing mutations, use techniques that should legitimately change the answer:
+These mutations test how prefix caching behaves when prompts remain structurally similar but the correct output should change.
 
-parameter change: coefficients, initial values, thresholds
-unit change: meters to centimeters, Celsius to Fahrenheit
-date/time change: today vs tomorrow, 2024 vs 2025
-constraint change: different boundary condition, conservation rule, allowed assumptions
-retrieved-chunk replacement: swap one supporting document with a different one
-retrieved-chunk insertion/deletion: add or remove evidence
-query target change: one entity, location, or variable changes
-schema/output change with semantic effect: ask for max instead of average, summary instead of exact value
-resolution/grid change in scientific prompts when the requested output tensor shape changes
-scenario change: same setup, different operating condition or regime
+## Step 1: Define the workload and mutation taxonomy
+For each workload family, define controlled mutation types and analyze them separately. The benchmark should study one mutation family at a time first, then later include mixed mutations. This separation is important because meaning-preserving and meaning-changing mutations have different evaluation goals and should not be mixed in analysis.
 
-2. Build the prompt generator and overlap analyzer
-Implement a generator that produces prompt pairs or families with controlled reuse. Add utilities that measure shared prefix length, first divergence point, total token overlap, and mutation type.
-For RAG-style prompts, the easiest path is to build on public QA and retrieval datasets. FlashRAG provides many preprocessed RAG benchmarks. There are several common sources such as Natural Questions, HotpotQA, MuSiQue, and BEIR which can be used as retrieval corpora with diverse domains. 
-For structured scientific prompts, however, the public benchmarks are not enough. Datasets like Turing-Open-Reasoning and WildSci can give us realistic science problem statements but they do not provide controlled prompt structure. We hence need to generate our own prompt families from templates, parameter sweeps, and fixed schemas, so we know exactly what changed and where. 
-We can also use LLMs to generate variants of prompts however, algorithmic and template-based mutations will be the ground truth here because they are reproducible and exact. LLM-paraphrasing can be added separately to the datasets in different buckets.
-As metrics for measuring the mutations, we can focus on token-prefix, edit-style and semantic metrics. Token-prefix metrics can be parameters such as shared prefix length, first divergence position, shared-prifix ratio and many more. Edit-style metrics can be formulate as token edit distance, simple diff stattistics, similarly to describe how much the prompt changes structurally. Semantic similarity metrics measure the embeding cosine similarity with tools such as SentenceTransformers, which are specifically designed for semantic textual similarity and embedding-based similarity scoring.
+## Step 2: Build the prompt generator and overlap analyzer
+Implement a prompt generator that produces prompt pairs or prompt families with controlled reuse. For each pair, compute overlap statistics such as:
+- shared prefix length
+- first divergence position
+- shared-prefix ratio
+- token overlap or token Jaccard
+- edit-style metrics
+- optional semantic similarity scores
 
-3. Build the benchmark harness
-Run inference with and without prefix caching on the same prompt sets. Record TTFT, end-to-end latency, throughput, and memory-related statistics, with TTFT as the primary metric.
+For RAG prompts, public QA and retrieval datasets can seed the prompt families. Useful sources include Natural Questions, HotpotQA, MuSiQue, BEIR, and FlashRAG-style processed datasets. For scientific prompts, public datasets can provide realistic problem statements, but controlled prompt families should mostly come from templates, parameter sweeps, and fixed output schemas.
 
-4. Add prompt-organization baselines
-Create alternative prompt layouts that keep stable content early and volatile content late, normalize formatting, and preserve chunk order. Re-run the same workloads to measure how much performance is recovered through organization alone.
+Algorithmic and template-based mutations should be treated as the main ground truth because they are reproducible and exactly labeled. LLM-generated rephrasing can be added later as a separate bucket.
 
-5. Analyze breakpoints and extract guidance
-Plot TTFT benefit versus first divergence position and workload type. Summarize which mutations destroy reuse fastest, which preserve it, and which prompt-design rules consistently recover substantial benefit.
+## Mutation validation
+Mutation generation alone is not enough. Each mutation should also be validated.
+
+For **meaning-preserving mutations**, validation can combine:
+- sentence-transformer cosine similarity
+- BERTScore
+- optional NLI-based bidirectional entailment checks
+- rule-based checks for formatting, reorder, and typo families
+
+For **meaning-changing mutations**, validation should primarily rely on the known changed field and mutation-specific checks, such as:
+- parameter-field change detection
+- unit marker detection
+- retrieved-chunk set differences
+- today/tomorrow flips
+- logical polarity cues such as `must` → `must not`, `agree` → `disagree`, or `increase` → `decrease`
+
+## Mutation severity calibration
+Each mutation should also receive severity scores from three perspectives:
+- **surface severity**: sequence difference, changed-token ratio, first-divergence ratio
+- **semantic severity**: embedding distance, BERTScore distance, NLI non-entailment
+- **task severity**: mutation-family-specific signals such as parameter magnitude, unit shift, evidence shift, or polarity shift
+
+This makes it possible to compare not only mutation type, but also mutation strength.
+
+## Step 3: Build the benchmark harness
+Run inference with and without prefix caching on the same prompt sets. Record TTFT, end-to-end latency, throughput, output length, cache-related reuse information if available, and GPU memory statistics. TTFT should be the primary metric because prefix caching mainly reduces repeated prefill work.
+
+## Step 4: Add prompt-organization baselines
+Design alternative prompt layouts that keep stable content early and volatile content late. Examples include:
+- normalizing formatting
+- preserving consistent chunk order
+- isolating changing fields near the end of the prompt
+- canonicalizing structured sections
+
+Re-run the same workloads to measure how much performance can be recovered through organization alone, before using more advanced cache composition methods.
+
+## Step 5: Analyze breakpoints and extract guidance
+The final analysis should identify:
+- which mutation families destroy reuse fastest
+- which changes preserve reuse well
+- how first-divergence position affects TTFT gains
+- how much performance can be recovered through better prompt organization
+- whether semantic similarity and prefix similarity move together or diverge
+
+The benchmark should produce both system-level findings and practical design rules for building prompts that remain cache-friendly under realistic variation.
+
+## Planned repository organization
+The repository should be organized by project stage. Everything related to prompt mutation lives under the `prompt_mutation/` subdirectory. Future stages, such as inference benchmarking or prompt-organization baselines, can live in separate subdirectories with their own code and documentation.

@@ -1,1 +1,9 @@
 .venv/
+data/
+outputs/
+.DS_Store
+prompt_mutation/__pycache__/
+prompt_organization/__pycache__/
+analysis/__pycache__/
+inference_benchmark/__pycache__/
+__pycache__/
