@@ -10,7 +10,7 @@ PROJECT_ROOT="$HOME/work/prefix_caching"
 SCRATCH_ROOT="$SCRATCH/prefix_caching"
 
 mkdir -p "$PROJECT_ROOT"/{wheelhouse,hf_cache,raw_data}
-mkdir -p "$SCRATCH_ROOT"/{processed,mutation,prompt_organization,benchmark_results,analysis}
+mkdir -p "$SCRATCH_ROOT"/{benchmark_results,analysis}
 
 virtualenv --no-download "$PROJECT_ROOT/.venv"
 source "$PROJECT_ROOT/.venv/bin/activate"

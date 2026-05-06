@@ -3,21 +3,17 @@
 #SBATCH --job-name=apply_layouts
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
-#SBATCH --time=00:30:00
+#SBATCH --time=00:15:00
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=8G
 
 set -euo pipefail
-
-# # Robust scratch dir
-# SCRATCH_DIR="${SLURM_TMPDIR:-${TMPDIR:-/tmp/$USER/$SLURM_JOB_ID}}"
-# mkdir -p "$SCRATCH_DIR"
-# echo "SCRATCH_DIR=$SCRATCH_DIR"
 
 module --force purge
 module load StdEnv/2023
 module load gcc/12.3 arrow/24.0.0 opencv/4.13 python/3.12
+module load scipy-stack/2025a
 
 PROJECT_ROOT="$HOME/work/prefix_caching"
 SCRATCH_ROOT="$SCRATCH/prefix_caching"
@@ -27,7 +23,7 @@ cd "$PROJECT_ROOT"
 
 mkdir -p "$SCRATCH_ROOT/prompt_organization"
 
-INPUT_JSONL="$SCRATCH_ROOT/mutation/rag/meaning_preserving/algorithmic/chunk_reorder/<your_file>.jsonl"
+INPUT_JSONL="$SCRATCH_ROOT/mutation/rag/meaning_preserving/algorithmic/chunk_reorder/<actual_file>.jsonl"
 
 python -m prompt_organization.apply_layouts \
   --input-path "$INPUT_JSONL" \
