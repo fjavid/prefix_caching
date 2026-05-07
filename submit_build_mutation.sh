@@ -10,15 +10,10 @@
 
 set -euo pipefail
 
-# # Robust scratch dir
-# SCRATCH_DIR="${SLURM_TMPDIR:-${TMPDIR:-/tmp/$USER/$SLURM_JOB_ID}}"
-# mkdir -p "$SCRATCH_DIR"
-# echo "SCRATCH_DIR=$SCRATCH_DIR"
-
-
 module --force purge
 module load StdEnv/2023
 module load gcc/12.3 arrow/24.0.0 opencv/4.13 python/3.12
+module load scipy-stack/2025a
 
 PROJECT_ROOT="$HOME/work/prefix_caching"
 SCRATCH_ROOT="$SCRATCH/prefix_caching"
@@ -29,20 +24,20 @@ export HF_HOME="$PROJECT_ROOT/hf_cache"
 export TRANSFORMERS_CACHE="$PROJECT_ROOT/hf_cache"
 export HF_DATASETS_CACHE="$PROJECT_ROOT/hf_cache/datasets"
 
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export HF_DATASETS_OFFLINE=1
+
 mkdir -p "$SCRATCH_ROOT"/{processed,mutation}
 
 cd "$PROJECT_ROOT"
 
 python prompt_mutation/build_mutation_dataset.py \
   --workload rag \
-  --dataset-name LLukas22/nq-simplified \
-  --split train \
-  --max-samples 50 \
+  --load-processed-dir "$SCRATCH_ROOT/processed/rag_examples.jsonl" \
   --semantic-class meaning_preserving \
   --generation-class algorithmic \
   --mutation-type chunk_reorder \
   --validation-backend sentence_transformer \
   --severity-backend sentence_transformer \
-  --save-processed-dir "$SCRATCH_ROOT/processed/rag_examples.jsonl" \
-  --cache-dir "$PROJECT_ROOT/hf_cache" \
   --output-root "$SCRATCH_ROOT/mutation"
