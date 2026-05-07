@@ -23,7 +23,7 @@ cd "$PROJECT_ROOT"
 
 mkdir -p "$SCRATCH_ROOT/prompt_organization"
 
-INPUT_JSONL="$SCRATCH_ROOT/mutation/rag/meaning_preserving/algorithmic/chunk_reorder/179df1e9cace40df9786c3c779235778jsonl"
+INPUT_JSONL="$SCRATCH_ROOT/mutation/rag/meaning_preserving/algorithmic/chunk_reorder/179df1e9cace40df9786c3c779235778.jsonl"
 
 python -m prompt_organization.apply_layouts \
   --input-path "$INPUT_JSONL" \
