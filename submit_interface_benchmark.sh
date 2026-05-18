@@ -35,7 +35,7 @@ INPUT_JSONL="$SCRATCH_ROOT/prompt_organization/rag_chunk_reorder_original.jsonl"
 python -m inference_benchmark.benchmark_prefix_cache \
   --backend-name vllm \
   --model-name "$PROJECT_ROOT/models/TinyLlama-1.1B-Chat-v1.0" \
-  --disable-prefix-caching \
+  --enable-prefix-caching \
   --mutation-jsonl-path "$INPUT_JSONL" \
   --output-dir "$SCRATCH_ROOT/benchmark_results" \
-  --run-name rag_chunk_reorder_original_cache_off
+  --run-name rag_chunk_reorder_original_cache_on
