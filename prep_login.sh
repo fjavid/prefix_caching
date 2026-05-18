@@ -39,7 +39,7 @@ mkdir -p "$PROJECT_ROOT/models"
 
 if [ ! -d "$PROJECT_ROOT/models/TinyLlama-1.1B-Chat-v1.0" ]; then
     export HF_HUB_DISABLE_XET=1
-    huggingface-cli download TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+    hf download TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
       --local-dir "$PROJECT_ROOT/models/TinyLlama-1.1B-Chat-v1.0"
 fi
 
