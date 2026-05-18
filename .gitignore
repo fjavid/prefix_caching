@@ -2,6 +2,7 @@
 .vscode/
 data/
 outputs/
+models/
 .DS_Store
 prompt_mutation/__pycache__/
 prompt_organization/__pycache__/
