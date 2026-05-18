@@ -22,11 +22,19 @@ SCRATCH_ROOT="$SCRATCH/prefix_caching"
 source "$PROJECT_ROOT/.venv/bin/activate"
 cd "$PROJECT_ROOT"
 
+export HF_HOME="$PROJECT_ROOT/hf_cache"
+export TRANSFORMERS_CACHE="$PROJECT_ROOT/hf_cache"
+export HF_DATASETS_CACHE="$PROJECT_ROOT/hf_cache/datasets"
+
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export HF_DATASETS_OFFLINE=1
+
 INPUT_JSONL="$SCRATCH_ROOT/prompt_organization/rag_chunk_reorder_original.jsonl"
 
 python -m inference_benchmark.benchmark_prefix_cache \
   --backend-name vllm \
-  --model-name TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+  --model-name "$PROJECT_ROOT/models/TinyLlama-1.1B-Chat-v1.0" \
   --disable-prefix-caching \
   --mutation-jsonl-path "$INPUT_JSONL" \
   --output-dir "$SCRATCH_ROOT/benchmark_results" \
