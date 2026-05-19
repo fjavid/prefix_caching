@@ -44,6 +44,11 @@ def load_benchmark_jsonl(path: str) -> pd.DataFrame:
 
 
 def merge_cache_on_off(df: pd.DataFrame) -> pd.DataFrame:
+    print(df.shape)
+    print(df.columns.tolist())
+    print(df["cache_enabled"].value_counts(dropna=False))
+    print(df["cache_enabled"].dtype)
+    print(df[["case_id", "cache_enabled"]].head())
     cache_on = df[df["cache_enabled"] == True].copy()
     cache_off = df[df["cache_enabled"] == False].copy()
 
