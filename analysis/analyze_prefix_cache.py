@@ -65,11 +65,25 @@ def merge_cache_on_off(df: pd.DataFrame) -> pd.DataFrame:
         # "severity_combined_score",
     ]
 
-    merged = cache_on[key_cols + ["ttft_on", "latency_on", "tps_on"]].merge(
-        cache_off[key_cols + ["ttft_off", "latency_off", "tps_off"]],
-        on=key_cols,
-        how="inner",
-    )
+    meta_cols = [
+        "first_divergence_token",
+        "token_shared_prefix_ratio",
+        "sequence_match_ratio",
+        "semantic_cosine_overlap",
+        "validation_is_valid",
+        "severity_combined_score",
+    ]
+
+    merged = cache_on[key_cols + meta_cols + ["ttft_on", "latency_on", "tps_on"]].merge(
+    cache_off[key_cols + ["ttft_off", "latency_off", "tps_off"]],
+    on=key_cols,
+    how="inner",
+)
+    # merged = cache_on[key_cols + ["ttft_on", "latency_on", "tps_on"]].merge(
+    #     cache_off[key_cols + ["ttft_off", "latency_off", "tps_off"]],
+    #     on=key_cols,
+    #     how="inner",
+    # )
 
     merged["latency_gain_seconds"] = merged["latency_off"] - merged["latency_on"]
     merged["latency_speedup_ratio"] = merged["latency_off"] / merged["latency_on"]
