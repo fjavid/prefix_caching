@@ -22,15 +22,15 @@ source "$PROJECT_ROOT/.venv/bin/activate"
 cd "$PROJECT_ROOT"
 
 mkdir -p "$SCRATCH_ROOT/analysis"
-mkdir -p "$SCRATCH_ROOT/analysis/plots_rag_chunk_reorder_original"
+mkdir -p "$SCRATCH_ROOT/analysis/plots_rag_chunk_reorder_stable_first"
 
 python -m analysis.analyze_prefix_cache \
   --input-paths \
-    "$SCRATCH_ROOT/benchmark_results/rag_chunk_reorder_original_cache_off.jsonl" \
-    "$SCRATCH_ROOT/benchmark_results/rag_chunk_reorder_original_cache_on.jsonl" \
+    "$SCRATCH_ROOT/benchmark_results/rag_chunk_reorder_stable_first_cache_off.jsonl" \
+    "$SCRATCH_ROOT/benchmark_results/rag_chunk_reorder_stable_first_cache_on.jsonl" \
   --output-dir "$SCRATCH_ROOT/analysis" \
-  --prefix rag_chunk_reorder_original
+  --prefix rag_chunk_reorder_stable_first
 
 python -m analysis.plot_prefix_cache_results \
-  --merged-csv "$SCRATCH_ROOT/analysis/rag_chunk_reorder_original.merged.csv" \
-  --output-dir "$SCRATCH_ROOT/analysis/plots_rag_chunk_reorder_original"
+  --merged-csv "$SCRATCH_ROOT/analysis/rag_chunk_reorder_stable_first.merged.csv" \
+  --output-dir "$SCRATCH_ROOT/analysis/plots_rag_chunk_reorder_stable_first"
