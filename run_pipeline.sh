@@ -26,6 +26,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# Pinned so child sbatch scripts can locate pipeline_config.sh regardless of submit CWD
+# or SLURM script-spooling.
+export PIPELINE_DIR="$SCRIPT_DIR"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/pipeline_config.sh"
 
@@ -51,7 +54,7 @@ echo ""
 
 # Build a --export=ALL,KEY=VAL,... string that pins all our pipeline knobs into the child job env.
 build_export_arg() {
-  local vars=(PROJECT_ROOT SCRATCH_ROOT MODEL_PATH
+  local vars=(PIPELINE_DIR PROJECT_ROOT SCRATCH_ROOT MODEL_PATH
               WORKLOAD SEMANTIC_CLASS GENERATION_CLASS MUTATION_TYPE
               STRATEGIES CACHE_MODES)
   local pairs=()

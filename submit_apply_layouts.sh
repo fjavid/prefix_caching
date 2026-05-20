@@ -10,7 +10,9 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# Under sbatch, the script is run from a spool dir, so BASH_SOURCE is unreliable.
+# Prefer PIPELINE_DIR (set by run_pipeline.sh), then SLURM_SUBMIT_DIR, then BASH_SOURCE.
+SCRIPT_DIR="${PIPELINE_DIR:-${SLURM_SUBMIT_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)}}"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/pipeline_config.sh"
 
