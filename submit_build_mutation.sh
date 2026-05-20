@@ -10,34 +10,28 @@
 
 set -euo pipefail
 
-module --force purge
-module load StdEnv/2023
-module load gcc/12.3 arrow/24.0.0 opencv/4.13 python/3.12
-module load scipy-stack/2025a
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pipeline_config.sh"
 
-PROJECT_ROOT="$HOME/work/prefix_caching"
-SCRATCH_ROOT="$SCRATCH/prefix_caching"
+load_modules
+activate_venv
+set_offline_env
 
-source "$PROJECT_ROOT/.venv/bin/activate"
-
-export HF_HOME="$PROJECT_ROOT/hf_cache"
-export TRANSFORMERS_CACHE="$PROJECT_ROOT/hf_cache"
-export HF_DATASETS_CACHE="$PROJECT_ROOT/hf_cache/datasets"
-
-export HF_HUB_OFFLINE=1
-export TRANSFORMERS_OFFLINE=1
-export HF_DATASETS_OFFLINE=1
-
-mkdir -p "$SCRATCH_ROOT"/{processed,mutation}
-
+mkdir -p "$PROCESSED_DIR" "$MUTATION_DIR"
 cd "$PROJECT_ROOT"
 
+echo "Building mutation dataset:"
+echo "  workload=$WORKLOAD semantic_class=$SEMANTIC_CLASS"
+echo "  generation_class=$GENERATION_CLASS mutation_type=$MUTATION_TYPE"
+echo "  output_root=$SCRATCH_ROOT/mutation"
+
 python prompt_mutation/build_mutation_dataset.py \
-  --workload rag \
-  --load-processed-dir "$SCRATCH_ROOT/processed/rag_examples.jsonl" \
-  --semantic-class meaning_preserving \
-  --generation-class algorithmic \
-  --mutation-type chunk_reorder \
+  --workload "$WORKLOAD" \
+  --load-processed-dir "$PROCESSED_DIR/${WORKLOAD}_examples.jsonl" \
+  --semantic-class "$SEMANTIC_CLASS" \
+  --generation-class "$GENERATION_CLASS" \
+  --mutation-type "$MUTATION_TYPE" \
   --validation-backend sentence_transformer \
   --severity-backend sentence_transformer \
   --output-root "$SCRATCH_ROOT/mutation"

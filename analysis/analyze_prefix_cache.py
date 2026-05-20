@@ -63,14 +63,14 @@ def merge_cache_on_off(df: pd.DataFrame) -> pd.DataFrame:
         "followup_tokens_per_second": "tps_off",
     })
 
-    key_cols = [
-        "case_id", #"workload", "semantic_class", "mutation_type", "relation",
-        # "layout_strategy", "first_divergence_token", "token_shared_prefix_ratio",
-        # "sequence_match_ratio", "semantic_cosine_overlap", "validation_is_valid",
-        # "severity_combined_score",
-    ]
+    key_cols = ["case_id"]
 
     meta_cols = [
+        "workload",
+        "semantic_class",
+        "mutation_type",
+        "relation",
+        "layout_strategy",
         "first_divergence_token",
         "token_shared_prefix_ratio",
         "sequence_match_ratio",
@@ -80,10 +80,10 @@ def merge_cache_on_off(df: pd.DataFrame) -> pd.DataFrame:
     ]
 
     merged = cache_on[key_cols + meta_cols + ["ttft_on", "latency_on", "tps_on"]].merge(
-    cache_off[key_cols + ["ttft_off", "latency_off", "tps_off"]],
-    on=key_cols,
-    how="inner",
-)
+        cache_off[key_cols + ["ttft_off", "latency_off", "tps_off"]],
+        on=key_cols,
+        how="inner",
+    )
     # merged = cache_on[key_cols + ["ttft_on", "latency_on", "tps_on"]].merge(
     #     cache_off[key_cols + ["ttft_off", "latency_off", "tps_off"]],
     #     on=key_cols,

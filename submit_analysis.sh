@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=def-mmehride
-#SBATCH --job-name=analyze_prefix_cache
+#SBATCH --job-name=analyze
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
 #SBATCH --time=00:15:00
@@ -10,27 +10,47 @@
 
 set -euo pipefail
 
-module --force purge
-module load StdEnv/2023
-module load gcc/12.3 arrow/24.0.0 opencv/4.13 python/3.12
-module load scipy-stack/2025a
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/pipeline_config.sh"
 
-PROJECT_ROOT="$HOME/work/prefix_caching"
-SCRATCH_ROOT="$SCRATCH/prefix_caching"
+load_modules
+activate_venv
 
-source "$PROJECT_ROOT/.venv/bin/activate"
+mkdir -p "$ANALYSIS_DIR"
 cd "$PROJECT_ROOT"
 
-mkdir -p "$SCRATCH_ROOT/analysis"
-mkdir -p "$SCRATCH_ROOT/analysis/plots_rag_chunk_reorder_stable_first"
+# Single-strategy override (when running outside the master pipeline).
+if [[ -n "${STRATEGY:-}" ]]; then
+  RUN_STRATEGIES="$STRATEGY"
+else
+  RUN_STRATEGIES="$STRATEGIES"
+fi
 
-python -m analysis.analyze_prefix_cache \
-  --input-paths \
-    "$SCRATCH_ROOT/benchmark_results/rag_chunk_reorder_stable_first_cache_off.jsonl" \
-    "$SCRATCH_ROOT/benchmark_results/rag_chunk_reorder_stable_first_cache_on.jsonl" \
-  --output-dir "$SCRATCH_ROOT/analysis" \
-  --prefix rag_chunk_reorder_stable_first
+echo "Analyzing strategies: $RUN_STRATEGIES"
 
-python -m analysis.plot_prefix_cache_results \
-  --merged-csv "$SCRATCH_ROOT/analysis/rag_chunk_reorder_stable_first.merged.csv" \
-  --output-dir "$SCRATCH_ROOT/analysis/plots_rag_chunk_reorder_stable_first"
+for strategy in $RUN_STRATEGIES; do
+  prefix="${TAG}_${strategy}"
+  plots_dir="$ANALYSIS_DIR/plots_${prefix}"
+  mkdir -p "$plots_dir"
+
+  input_off="$(benchmark_jsonl_path "$strategy" off)"
+  input_on="$(benchmark_jsonl_path "$strategy" on)"
+
+  for f in "$input_off" "$input_on"; do
+    if [[ ! -f "$f" ]]; then
+      echo "ERROR: missing benchmark result: $f" >&2
+      exit 1
+    fi
+  done
+
+  echo "=== analyzing strategy=$strategy ==="
+  python -m analysis.analyze_prefix_cache \
+    --input-paths "$input_off" "$input_on" \
+    --output-dir "$ANALYSIS_DIR" \
+    --prefix "$prefix"
+
+  python -m analysis.plot_prefix_cache_results \
+    --merged-csv "$ANALYSIS_DIR/${prefix}.merged.csv" \
+    --output-dir "$plots_dir"
+done
