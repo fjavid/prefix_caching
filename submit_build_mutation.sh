@@ -28,9 +28,9 @@ echo "  workload=$WORKLOAD semantic_class=$SEMANTIC_CLASS"
 echo "  generation_class=$GENERATION_CLASS mutation_type=$MUTATION_TYPE"
 echo "  output_root=$SCRATCH_ROOT/mutation"
 
-python prompt_mutation/build_mutation_dataset.py \
+python -m prompt_mutation.build_mutation_dataset \
   --workload "$WORKLOAD" \
-  --load-processed-dir "$PROCESSED_DIR/${WORKLOAD}_examples.jsonl" \
+  --load-processed-path "$PROCESSED_DIR/${WORKLOAD}_examples.jsonl" \
   --semantic-class "$SEMANTIC_CLASS" \
   --generation-class "$GENERATION_CLASS" \
   --mutation-type "$MUTATION_TYPE" \

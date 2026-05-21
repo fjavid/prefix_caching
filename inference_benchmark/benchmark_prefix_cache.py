@@ -22,6 +22,7 @@ def make_backend(cfg: BackendConfig):
             top_p=cfg.top_p,
             gpu_memory_utilization=cfg.gpu_memory_utilization,
             trust_remote_code=cfg.trust_remote_code,
+            use_async_ttft=cfg.use_async_ttft,
         )
     if cfg.backend_name == 'sglang':
         return SGLangBackend(
@@ -48,7 +49,7 @@ def run_benchmark(config: BenchmarkConfig) -> Path:
 
     backend = make_backend(config.backend)
     backend.start()
-    runner = InferenceRunner(backend)
+    runner = InferenceRunner(backend, warmup_iters=config.backend.warmup_iters)
     results = runner.run_cases(cases)
     backend.stop()
 
@@ -83,6 +84,12 @@ def parse_args() -> BenchmarkConfig:
     p.add_argument('--top-p', type=float, default=1.0)
     p.add_argument('--gpu-memory-utilization', type=float, default=0.85)
     p.add_argument('--trust-remote-code', action='store_true')
+    p.add_argument('--use-async-ttft', action='store_true', default=True,
+                   help='Use AsyncLLMEngine to measure TTFT (default).')
+    p.add_argument('--no-async-ttft', dest='use_async_ttft', action='store_false',
+                   help='Fall back to offline LLM.generate; TTFT will be None.')
+    p.add_argument('--warmup-iters', type=int, default=2,
+                   help='Number of warmup requests run (and tagged) before the measured loop.')
 
     p.add_argument('--mutation-jsonl-path', required=True)
     p.add_argument('--max-cases', type=int, default=None)
@@ -90,7 +97,10 @@ def parse_args() -> BenchmarkConfig:
     p.add_argument('--num-shards', type=int, default=1)
     p.add_argument('--include-relations', nargs='*', default=['exact_reuse', 'partial_reuse', 'unrelated_control'])
 
-    p.add_argument('--output-dir', default='../data/benchmark_results')
+    p.add_argument(
+        '--output-dir',
+        default=str(Path(__file__).resolve().parents[1] / 'outputs' / 'benchmark_results'),
+    )
     p.add_argument('--run-name', default='prefix_cache_benchmark_run')
 
     args = p.parse_args()
@@ -110,6 +120,8 @@ def parse_args() -> BenchmarkConfig:
             top_p=args.top_p,
             gpu_memory_utilization=args.gpu_memory_utilization,
             trust_remote_code=args.trust_remote_code,
+            use_async_ttft=args.use_async_ttft,
+            warmup_iters=args.warmup_iters,
         ),
         dataset=DatasetConfig(
             mutation_jsonl_path=args.mutation_jsonl_path,

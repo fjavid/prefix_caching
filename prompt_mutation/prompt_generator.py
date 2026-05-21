@@ -78,6 +78,26 @@ class BaseMutator:
     def __init__(self, seed: int = 0) -> None:
         self.rng = random.Random(seed)
 
+    def _shuffle_until_different(self, seq: List[Any], max_retries: int = 16) -> None:
+        """Shuffle `seq` in place until its order differs from the input.
+
+        Raises ValueError if the sequence cannot diverge (length < 2 or all
+        elements identical). Falls back to reversing the sequence after
+        `max_retries` failed shuffles.
+        """
+        if len(seq) < 2:
+            raise ValueError(f"Cannot reorder a sequence of length {len(seq)}.")
+        if all(x == seq[0] for x in seq):
+            raise ValueError("Cannot reorder a sequence whose elements are all identical.")
+        original = list(seq)
+        for _ in range(max_retries):
+            self.rng.shuffle(seq)
+            if seq != original:
+                return
+        seq[:] = original[::-1]
+        if seq == original:
+            raise ValueError("Shuffle-until-different fallback (reverse) failed to produce a new order.")
+
     def mutate_rag(self, base: RAGExample, mutation_type: str, mutation_severity: float = 1.0,
                    candidate_chunks: Optional[List[str]] = None, llm_fn: Optional[Callable[[str], str]] = None) -> PromptRecord:
         raise NotImplementedError
@@ -132,7 +152,12 @@ class AlgorithmicMeaningPreservingMutator(BaseMutator):
             mutated.user_query = self._synonym_substitute(mutated.user_query)
             changed_field = "user_query"
         elif mutation_type == "chunk_reorder":
-            self.rng.shuffle(mutated.retrieved_chunks)
+            if len(mutated.retrieved_chunks) < 2:
+                raise ValueError(
+                    f"chunk_reorder requires >= 2 retrieved_chunks (got {len(mutated.retrieved_chunks)}). "
+                    "Increase min_chunks in DataLoadConfig or use distractor padding."
+                )
+            self._shuffle_until_different(mutated.retrieved_chunks)
             changed_field = "retrieved_chunks"
         else:
             raise ValueError(f"Unsupported algorithmic meaning-preserving RAG mutation: {mutation_type}")
@@ -155,7 +180,11 @@ class AlgorithmicMeaningPreservingMutator(BaseMutator):
             mutated.problem_description = self._template_rewrite(mutated.problem_description)
             changed_field = "problem_description"
         elif mutation_type == "field_reorder":
-            mutated.render_order = ["equation", "constraints", "problem", "parameters", "grid", "output_schema"]
+            default_order = ["problem", "equation", "parameters", "grid", "constraints", "output_schema"]
+            current_order = base.render_order or default_order
+            new_order = list(current_order)
+            self._shuffle_until_different(new_order)
+            mutated.render_order = new_order
             changed_field = "render_order"
         elif mutation_type == "synonym_substitution":
             mutated.problem_description = self._synonym_substitute(mutated.problem_description)
@@ -407,9 +436,22 @@ class LLMMeaningChangingMutator(BaseMutator):
                                 base.render(), mutated.render(), {"changed_field": changed_field})
 
 
-def save_prompt_records(records: List[PromptRecord], root_dir: str = "../data/mutation", filename: Optional[str] = None) -> Path:
+def save_prompt_records(
+    records: List[PromptRecord],
+    root_dir: Optional[str] = None,
+    filename: Optional[str] = None,
+) -> Path:
+    if root_dir is None:
+        root_dir = str(Path(__file__).resolve().parents[1] / "outputs" / "mutation")
     if not records:
         raise ValueError("No records to save.")
+    degenerate = [r.prompt_id for r in records if r.base_prompt == r.mutated_prompt]
+    if degenerate:
+        raise ValueError(
+            f"{len(degenerate)} record(s) have base_prompt == mutated_prompt "
+            f"(first: {degenerate[0]}). The mutation failed to produce a different prompt; "
+            "fix the mutator or the upstream data instead of saving."
+        )
     first = records[0]
     bucket_dir = Path(root_dir) / first.workload / first.semantic_class / first.generation_class / first.mutation_type
     bucket_dir.mkdir(parents=True, exist_ok=True)

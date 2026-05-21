@@ -22,37 +22,40 @@ activate_venv
 mkdir -p "$ANALYSIS_DIR"
 cd "$PROJECT_ROOT"
 
-# Single-strategy override (when running outside the master pipeline).
-if [[ -n "${STRATEGY:-}" ]]; then
-  RUN_STRATEGIES="$STRATEGY"
-else
-  RUN_STRATEGIES="$STRATEGIES"
-fi
+# Cross-strategy combined analysis.
+# Loads every benchmark JSONL produced for $TAG and produces:
+#   $ANALYSIS_DIR/${TAG}.flat.csv
+#   $ANALYSIS_DIR/${TAG}.merged.csv
+#   $ANALYSIS_DIR/${TAG}.summary.json
+#   $ANALYSIS_DIR/plots_${TAG}/*.png
 
-echo "Analyzing strategies: $RUN_STRATEGIES"
+PREFIX="$TAG"
+PLOTS_DIR="$ANALYSIS_DIR/plots_${PREFIX}"
+mkdir -p "$PLOTS_DIR"
 
-for strategy in $RUN_STRATEGIES; do
-  prefix="${TAG}_${strategy}"
-  plots_dir="$ANALYSIS_DIR/plots_${prefix}"
-  mkdir -p "$plots_dir"
-
-  input_off="$(benchmark_jsonl_path "$strategy" off)"
-  input_on="$(benchmark_jsonl_path "$strategy" on)"
-
-  for f in "$input_off" "$input_on"; do
-    if [[ ! -f "$f" ]]; then
-      echo "ERROR: missing benchmark result: $f" >&2
+INPUT_PATHS=()
+for strategy in $STRATEGIES; do
+  for mode in $CACHE_MODES; do
+    p="$(benchmark_jsonl_path "$strategy" "$mode")"
+    if [[ ! -f "$p" ]]; then
+      echo "ERROR: missing benchmark result: $p" >&2
       exit 1
     fi
+    INPUT_PATHS+=("$p")
   done
-
-  echo "=== analyzing strategy=$strategy ==="
-  python -m analysis.analyze_prefix_cache \
-    --input-paths "$input_off" "$input_on" \
-    --output-dir "$ANALYSIS_DIR" \
-    --prefix "$prefix"
-
-  python -m analysis.plot_prefix_cache_results \
-    --merged-csv "$ANALYSIS_DIR/${prefix}.merged.csv" \
-    --output-dir "$plots_dir"
 done
+
+METRIC="${METRIC:-latency_gain_seconds}"
+
+echo "Analyzing $((${#INPUT_PATHS[@]})) result files with metric=$METRIC"
+
+python -m analysis.analyze_prefix_cache \
+  --input-paths "${INPUT_PATHS[@]}" \
+  --output-dir "$ANALYSIS_DIR" \
+  --prefix "$PREFIX" \
+  --metric "$METRIC"
+
+python -m analysis.plot_prefix_cache_results \
+  --merged-csv "$ANALYSIS_DIR/${PREFIX}.merged.csv" \
+  --output-dir "$PLOTS_DIR" \
+  --metric "$METRIC"

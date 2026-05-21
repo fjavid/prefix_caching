@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, List
+
+_DEFAULT_BENCHMARK_OUTPUT_DIR = str(
+    Path(__file__).resolve().parents[1] / "outputs" / "benchmark_results"
+)
 
 
 @dataclass
@@ -14,6 +19,8 @@ class BackendConfig:
     top_p: float = 1.0
     gpu_memory_utilization: float = 0.85
     trust_remote_code: bool = False
+    use_async_ttft: bool = True
+    warmup_iters: int = 2
 
 
 @dataclass
@@ -27,7 +34,7 @@ class DatasetConfig:
 
 @dataclass
 class OutputConfig:
-    output_dir: str = "../data/benchmark_results"
+    output_dir: str = _DEFAULT_BENCHMARK_OUTPUT_DIR
     run_name: str = "prefix_cache_benchmark_run"
 
 

@@ -27,6 +27,7 @@ class BackendBase:
         top_p: float = 1.0,
         gpu_memory_utilization: float = 0.9,
         trust_remote_code: bool = False,
+        use_async_ttft: bool = True,
     ) -> None:
         self.model_name = model_name
         self.enable_prefix_caching = enable_prefix_caching
@@ -35,6 +36,7 @@ class BackendBase:
         self.top_p = top_p
         self.gpu_memory_utilization = gpu_memory_utilization
         self.trust_remote_code = trust_remote_code
+        self.use_async_ttft = use_async_ttft
         self._started = False
 
     def start(self) -> None:

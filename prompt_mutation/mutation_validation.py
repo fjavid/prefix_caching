@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any, List
 import re
 from difflib import SequenceMatcher
 
-from prompt_generator import PromptRecord
+from .prompt_generator import PromptRecord
 
 # NLI = Natural Language Inference.
 # It tests whether one text entails, contradicts, or is neutral with respect to another.
@@ -66,7 +66,14 @@ def sequence_ratio(a: str, b: str) -> float:
 
 
 def parse_rag_chunks(prompt: str) -> List[str]:
-    matches = re.findall(r"\[Document\s+\d+\]\n(.*?)(?=\n\n\[Document\s+\d+\]\n|\n\n[A-Z][^:\n]*:\n|\Z)", prompt, flags=re.S)
+    # Match each [Document N]\n block until: another [Document N], a section header,
+    # a paragraph break (\n\n), or end of string. The trailing \n\n covers the case
+    # where the prompt ends with a free-form instruction (no Section: header).
+    matches = re.findall(
+        r"\[Document\s+\d+\]\n(.*?)(?=\n\n\[Document\s+\d+\]\n|\n\n[A-Z][^:\n]*:\n|\n\n|\Z)",
+        prompt,
+        flags=re.S,
+    )
     return [m.strip() for m in matches if m.strip()]
 
 
@@ -150,10 +157,14 @@ class MeaningPreservingValidator:
             rules["normalized_sequence_ratio"] = sequence_ratio(normalize_for_formatting(base), normalize_for_formatting(mutated))
         elif mutation_type in {"chunk_reorder", "field_reorder"}:
             if record.workload == "rag":
-                rules["chunk_multiset_preserved"] = sorted(parse_rag_chunks(base)) == sorted(parse_rag_chunks(mutated))
+                base_chunks = parse_rag_chunks(base)
+                mutated_chunks = parse_rag_chunks(mutated)
+                rules["chunk_multiset_preserved"] = sorted(base_chunks) == sorted(mutated_chunks)
+                rules["chunk_order_changed"] = base_chunks != mutated_chunks
             else:
                 rules["same_core_words_ratio"] = sequence_ratio(" ".join(sorted(set(whitespace_tokens(base.lower())))),
                                                                " ".join(sorted(set(whitespace_tokens(mutated.lower())))))
+                rules["field_order_changed"] = base != mutated
         elif mutation_type == "typo":
             rules["changed_token_ratio"] = changed_token_ratio(base, mutated)
 
@@ -173,6 +184,9 @@ class MeaningPreservingValidator:
             valid &= rules.get("changed_token_ratio", 0.0) <= 0.15
         if mutation_type == "chunk_reorder" and record.workload == "rag":
             valid &= bool(rules.get("chunk_multiset_preserved", False))
+            valid &= bool(rules.get("chunk_order_changed", False))
+        if mutation_type == "field_reorder" and record.workload == "scientific":
+            valid &= bool(rules.get("field_order_changed", False))
 
         return ValidationResult(
             is_valid=bool(valid),

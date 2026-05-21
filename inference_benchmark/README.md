@@ -33,19 +33,21 @@ the `prompt_mutation/` pipeline.
 Run without prefix caching:
 
 ```bash
-python -m inference_benchmark.benchmark_prefix_cache   --backend-name vllm   --model-name TinyLlama/TinyLlama-1.1B-Chat-v1.0   --disable-prefix-caching   --mutation-jsonl-path ../data/mutation/scientific/meaning_changing/algorithmic/parameter_change/<file>.jsonl   --run-name tinyllama_no_cache
+python -m inference_benchmark.benchmark_prefix_cache   --backend-name vllm   --model-name TinyLlama/TinyLlama-1.1B-Chat-v1.0   --disable-prefix-caching   --mutation-jsonl-path outputs/mutation/scientific/meaning_changing/algorithmic/parameter_change/<file>.jsonl   --run-name tinyllama_no_cache
 ```
 
 Run with prefix caching:
 
 ```bash
-python -m inference_benchmark.benchmark_prefix_cache   --backend-name vllm   --model-name TinyLlama/TinyLlama-1.1B-Chat-v1.0   --enable-prefix-caching   --mutation-jsonl-path ../data/mutation/scientific/meaning_changing/algorithmic/parameter_change/<file>.jsonl   --run-name tinyllama_with_cache
+python -m inference_benchmark.benchmark_prefix_cache   --backend-name vllm   --model-name TinyLlama/TinyLlama-1.1B-Chat-v1.0   --enable-prefix-caching   --mutation-jsonl-path outputs/mutation/scientific/meaning_changing/algorithmic/parameter_change/<file>.jsonl   --run-name tinyllama_with_cache
 ```
 
 ## Notes
 
-- The current vLLM backend uses the offline Python API.
-- End-to-end latency is measured directly.
-- TTFT is left as `None` for now in the offline vLLM path because the basic API
-  does not expose it directly; a server-based timing path can be added later.
+- The vLLM backend supports two modes:
+  - `--use-async-ttft` (default): `AsyncLLMEngine` with streaming; measures
+    TTFT (time-to-first-token) and end-to-end latency.
+  - `--no-async-ttft`: blocking offline `LLM.generate` path; TTFT is `None`.
+- The runner does `warmup_iters` warmup requests (default 2) before the measured
+  loop. They are tagged `phase='warmup'` and dropped in analysis.
 - `sglang_backend.py` is scaffolded but not implemented yet.

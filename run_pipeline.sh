@@ -13,6 +13,11 @@
 # Stages can be individually skipped via SKIP_MUTATION / SKIP_LAYOUTS /
 # SKIP_BENCHMARK / SKIP_ANALYSIS (set to 1 to skip).
 #
+# Prerequisite (run once on the LOGIN NODE before any sbatch job):
+#   bash prep_login.sh        # builds .venv, downloads models, runs prepare_data.sh
+#   # or, to refresh just the data:
+#   bash prepare_data.sh
+#
 # Examples:
 #   ./run_pipeline.sh                                    # full pipeline with defaults
 #   SKIP_MUTATION=1 ./run_pipeline.sh                    # reuse existing mutation jsonl

@@ -7,12 +7,12 @@ from typing import Optional
 import argparse
 import json
 
-from data_loader import DataLoadConfig, load_examples
-from llm_fn import LLMConfig, make_llm_fn
-from overlap_analyzer import OverlapAnalyzer
-from mutation_validation import ValidationConfig, validate_record
-from severity_calibration import SeverityConfig, SeverityCalibrator
-from prompt_generator import (
+from .data_loader import DataLoadConfig, load_examples
+from .llm_fn import LLMConfig, make_llm_fn
+from .overlap_analyzer import OverlapAnalyzer
+from .mutation_validation import ValidationConfig, validate_record
+from .severity_calibration import SeverityConfig, SeverityCalibrator
+from .prompt_generator import (
     save_prompt_records,
     AlgorithmicMeaningPreservingMutator,
     AlgorithmicMeaningChangingMutator,
@@ -43,8 +43,8 @@ class BuildConfig:
     severity_sentence_model_name: str
     severity_nli_model_name: str
     severity_bert_score_model_type: str
-    save_processed_dir: Optional[str]
-    load_processed_dir: Optional[str]
+    save_processed_path: Optional[str]
+    load_processed_path: Optional[str]
     cache_dir: Optional[str]
     output_root: str
     llm_backend: str
@@ -53,6 +53,8 @@ class BuildConfig:
     llm_max_tokens: int
     llm_top_p: float
     llm_seed: Optional[int]
+    min_chunks: int = 3
+    max_chunks: int = 4
 
 def build_dataset(config: BuildConfig) -> Path:
     load_cfg = DataLoadConfig(
@@ -64,8 +66,11 @@ def build_dataset(config: BuildConfig) -> Path:
         shard_index=config.shard_index,
         num_shards=config.num_shards,
         cache_dir=config.cache_dir,
-        save_processed_dir=config.save_processed_dir,
-        load_processed_dir=config.load_processed_dir,
+        save_processed_path=config.save_processed_path,
+        load_processed_path=config.load_processed_path,
+        min_chunks=config.min_chunks,
+        max_chunks=config.max_chunks,
+        distractor_seed=config.llm_seed or 0,
     )
     examples = load_examples(load_cfg)
 
@@ -169,10 +174,15 @@ def parse_args() -> BuildConfig:
     p.add_argument("--severity-sentence-model-name", default="all-mpnet-base-v2")
     p.add_argument("--severity-nli-model-name", default="MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7")
     p.add_argument("--severity-bert-score-model-type", default="microsoft/deberta-xlarge-mnli")
-    p.add_argument("--save-processed-dir", default=None)
-    p.add_argument("--load-processed-dir", default=None)
+    p.add_argument("--save-processed-path", default=None,
+                   help="JSONL file path to save preprocessed examples to.")
+    p.add_argument("--load-processed-path", default=None,
+                   help="JSONL file path to load preprocessed examples from (offline / no HF download).")
     p.add_argument("--cache-dir", default=None)
-    p.add_argument("--output-root", default="../data/mutation")
+    p.add_argument("--output-root", default=str(Path(__file__).resolve().parents[1] / "outputs" / "mutation"))
+    p.add_argument("--min-chunks", type=int, default=3,
+                   help="Minimum retrieved_chunks per RAG example; pads with distractors if fewer.")
+    p.add_argument("--max-chunks", type=int, default=4)
     p.add_argument("--llm-backend", default="mock")
     p.add_argument("--llm-model", default="mock-model")
     p.add_argument("--llm-temperature", type=float, default=0.0)

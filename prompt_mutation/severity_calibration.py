@@ -5,8 +5,8 @@ from dataclasses import dataclass, asdict
 from typing import Dict, Any, Optional, List
 from difflib import SequenceMatcher
 
-from prompt_generator import PromptRecord
-from mutation_validation import ValidationConfig, SemanticScorer
+from .prompt_generator import PromptRecord
+from .mutation_validation import ValidationConfig, SemanticScorer
 
 
 @dataclass

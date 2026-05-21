@@ -54,7 +54,11 @@ def build_cases(
     include_relations = include_relations or ['exact_reuse', 'partial_reuse', 'unrelated_control']
 
     partial_cases: List[BenchmarkCase] = []
+    degenerate: List[str] = []
     for rec in mutation_records:
+        if rec.base_prompt == rec.mutated_prompt:
+            degenerate.append(rec.prompt_id)
+            continue
         partial_cases.append(BenchmarkCase(
             case_id=rec.prompt_id + '::partial',
             workload=rec.workload,
@@ -65,6 +69,11 @@ def build_cases(
             followup_prompt=rec.mutated_prompt,
             metadata=rec.metadata,
         ))
+    if degenerate:
+        raise ValueError(
+            f"{len(degenerate)} mutation record(s) have base_prompt == mutated_prompt "
+            f"(first: {degenerate[0]}). Fix the mutation step before benchmarking."
+        )
 
     exact_cases: List[BenchmarkCase] = []
     if 'exact_reuse' in include_relations:

@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 from typing import List
 
-from mutation_validation import ValidationConfig, validate_record
-from severity_calibration import SeverityConfig, SeverityCalibrator
-from prompt_generator import PromptRecord
+from .mutation_validation import ValidationConfig, validate_record
+from .severity_calibration import SeverityConfig, SeverityCalibrator
+from .prompt_generator import PromptRecord
 
 
 def load_records(path: str) -> List[PromptRecord]:

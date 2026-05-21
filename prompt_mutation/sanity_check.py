@@ -1,11 +1,10 @@
+"""Tiny end-to-end sanity check. Run from the repo root:
+    python -m prompt_mutation.sanity_check
+"""
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(".").resolve()))
-
-from data_loader import DataLoadConfig, load_examples
-from prompt_generator import AlgorithmicMeaningChangingMutator
-from overlap_analyzer import OverlapAnalyzer
+from .data_loader import DataLoadConfig, load_examples
+from .prompt_generator import AlgorithmicMeaningChangingMutator
+from .overlap_analyzer import OverlapAnalyzer
 
 examples = load_examples(DataLoadConfig(workload="scientific", max_samples=2))
 mutator = AlgorithmicMeaningChangingMutator(seed=42)

@@ -28,7 +28,7 @@ The goal of this module is to generate controlled prompt mutations, measure how 
 Generate a small scientific mutation dataset:
 
 ```bash
-python build_mutation_dataset_v2.py \
+python -m prompt_mutation.build_mutation_dataset \
   --workload scientific \
   --semantic-class meaning_changing \
   --generation-class algorithmic \
@@ -36,28 +36,27 @@ python build_mutation_dataset_v2.py \
   --max-samples 20
 ```
 
-Generate a small RAG mutation dataset from a Hugging Face dataset:
+Generate a small RAG mutation dataset from a Hugging Face dataset
+(uses a pre-prepared examples file built by `prepare_data.sh`):
 
 ```bash
-python build_mutation_dataset_v2.py \
+python -m prompt_mutation.build_mutation_dataset \
   --workload rag \
-  --dataset-name natural_questions \
-  --split train[:200] \
+  --load-processed-path $SCRATCH/prefix_caching/processed/rag_examples.jsonl \
   --semantic-class meaning_preserving \
   --generation-class algorithmic \
-  --mutation-type formatting \
-  --max-samples 20
+  --mutation-type chunk_reorder
 ```
 
 Validate an existing mutation dataset and add validation/severity fields:
 
 ```bash
 python test_validation_severity.py \
-  --input-path ../data/mutation/scientific/meaning_changing/algorithmic/parameter_change/<file>.jsonl
+  --input-path outputs/mutation/scientific/meaning_changing/algorithmic/parameter_change/<file>.jsonl
 ```
 
 ## Outputs
-Generated datasets are stored under `../data/mutation/<workload>/<semantic_class>/<generation_class>/<mutation_type>/`.
+Generated datasets are stored under `outputs/mutation/<workload>/<semantic_class>/<generation_class>/<mutation_type>/` (local runs). On AllianceCanada, use `$SCRATCH/prefix_caching/mutation/...` via the SLURM pipeline scripts.
 Each record contains:
 - the base prompt
 - the mutated prompt

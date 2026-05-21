@@ -5,7 +5,8 @@
 # Knobs:
 #   SLURM_ACCOUNT   - cluster account
 #   PROJECT_ROOT    - repo root on the cluster (must contain .venv/, models/, etc.)
-#   SCRATCH_ROOT    - all generated data lives here
+#   SCRATCH_ROOT    - cluster artifact root (mutation, layouts, benchmarks, analysis)
+#   Local mirror    - repo outputs/ (see paths.py); sync from $SCRATCH after cluster runs
 #   MODEL_PATH      - local model directory used by vLLM (no internet on compute nodes)
 #   WORKLOAD        - rag | scientific
 #   SEMANTIC_CLASS  - meaning_preserving | meaning_changing

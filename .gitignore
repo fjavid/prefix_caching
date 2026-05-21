@@ -1,6 +1,5 @@
 .venv/
 .vscode/
-data/
 outputs/
 models/
 .DS_Store
