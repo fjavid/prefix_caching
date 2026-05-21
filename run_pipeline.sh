@@ -61,10 +61,13 @@ echo ""
 build_export_arg() {
   local vars=(PIPELINE_DIR PROJECT_ROOT SCRATCH_ROOT MODEL_PATH
               WORKLOAD SEMANTIC_CLASS GENERATION_CLASS MUTATION_TYPE
-              STRATEGIES CACHE_MODES)
+              STRATEGIES CACHE_MODES USE_ASYNC_TTFT VLLM_LOGGING_LEVEL)
   local pairs=()
   for v in "${vars[@]}"; do
-    pairs+=("$v=${!v}")
+    # Only export if defined (so unset vars stay unset rather than become "").
+    if [[ -n "${!v+x}" ]]; then
+      pairs+=("$v=${!v}")
+    fi
   done
   local IFS=,
   echo "ALL,${pairs[*]}"

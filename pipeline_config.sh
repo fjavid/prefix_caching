@@ -58,6 +58,8 @@ set_offline_env() {
   export HF_HUB_OFFLINE=1
   export TRANSFORMERS_OFFLINE=1
   export HF_DATASETS_OFFLINE=1
+  # Quiet vLLM's per-request logger so the benchmark .out file stays readable.
+  export VLLM_LOGGING_LEVEL="${VLLM_LOGGING_LEVEL:-WARNING}"
 }
 
 # Pick the newest .jsonl in the mutation directory (ignores .summary.json)

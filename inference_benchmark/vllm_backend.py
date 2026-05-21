@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import time
 import uuid
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from .backend_base import BackendBase, GenerationResult
 
@@ -39,13 +40,24 @@ class VLLMBackend(BackendBase):
         )
         if self.use_async_ttft:
             from vllm import AsyncEngineArgs, AsyncLLMEngine
-            engine_args = AsyncEngineArgs(
-                model=self.model_name,
-                enable_prefix_caching=self.enable_prefix_caching,
-                gpu_memory_utilization=self.gpu_memory_utilization,
-                trust_remote_code=self.trust_remote_code,
-                disable_log_requests=True,
-            )
+            # AsyncEngineArgs is a dataclass whose fields drift across vLLM versions.
+            # Build only the kwargs that actually exist in this installed wheel.
+            try:
+                field_names = {f.name for f in dataclasses.fields(AsyncEngineArgs)}
+            except TypeError:
+                field_names = set()
+            kwargs: Dict[str, Any] = {
+                'model': self.model_name,
+                'enable_prefix_caching': self.enable_prefix_caching,
+                'gpu_memory_utilization': self.gpu_memory_utilization,
+                'trust_remote_code': self.trust_remote_code,
+            }
+            # quiet per-request logging
+            if 'disable_log_requests' in field_names:
+                kwargs['disable_log_requests'] = True   # vLLM < 0.10
+            elif 'enable_log_requests' in field_names:
+                kwargs['enable_log_requests'] = False   # vLLM >= 0.10 (renamed + inverted)
+            engine_args = AsyncEngineArgs(**kwargs)
             self.async_engine = AsyncLLMEngine.from_engine_args(engine_args)
             self._loop = asyncio.new_event_loop()
         else:

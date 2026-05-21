@@ -34,10 +34,20 @@ else
   RUN_CACHE_MODES="$CACHE_MODES"
 fi
 
+# TTFT path: defaults to the async (AsyncLLMEngine) backend. Set USE_ASYNC_TTFT=0
+# to fall back to the simpler offline LLM.generate path (TTFT will be None).
+USE_ASYNC_TTFT="${USE_ASYNC_TTFT:-1}"
+if [[ "$USE_ASYNC_TTFT" -eq 1 ]]; then
+  async_flag="--use-async-ttft"
+else
+  async_flag="--no-async-ttft"
+fi
+
 echo "Benchmark grid:"
-echo "  strategies  = $RUN_STRATEGIES"
-echo "  cache_modes = $RUN_CACHE_MODES"
-echo "  model       = $MODEL_PATH"
+echo "  strategies      = $RUN_STRATEGIES"
+echo "  cache_modes     = $RUN_CACHE_MODES"
+echo "  model           = $MODEL_PATH"
+echo "  use_async_ttft  = $USE_ASYNC_TTFT"
 
 for strategy in $RUN_STRATEGIES; do
   input_jsonl="$(layout_jsonl_path "$strategy")"
@@ -57,6 +67,7 @@ for strategy in $RUN_STRATEGIES; do
       --backend-name vllm \
       --model-name "$MODEL_PATH" \
       $cache_flag \
+      $async_flag \
       --mutation-jsonl-path "$input_jsonl" \
       --output-dir "$BENCH_DIR" \
       --run-name "$run_name"
