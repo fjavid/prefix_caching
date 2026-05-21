@@ -33,6 +33,10 @@ class DataLoadConfig:
     max_chunks: int = 4
     # RNG seed for distractor sampling.
     distractor_seed: int = 0
+    # Truncate every retrieved chunk to at most this many whitespace-separated words.
+    # Prevents one long Wikipedia paragraph from blowing the model's context window.
+    # Set to 0 to disable truncation.
+    max_chunk_words: int = 200
 
 
 def _apply_sample_and_shard(ds: Dataset, max_samples: Optional[int], shard_index: int, num_shards: int) -> Dataset:
@@ -58,7 +62,16 @@ def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
-def _extract_chunks_from_row(row: Dict[str, Any]) -> List[str]:
+def _truncate_to_words(text: str, max_words: int) -> str:
+    if max_words <= 0:
+        return text
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+    return " ".join(words[:max_words])
+
+
+def _extract_chunks_from_row(row: Dict[str, Any], max_chunk_words: int = 0) -> List[str]:
     chunks: List[str] = []
     for key in ["context", "document", "documents", "passage", "paragraph"]:
         if key in row and row[key]:
@@ -81,10 +94,14 @@ def _extract_chunks_from_row(row: Dict[str, Any]) -> List[str]:
                 txt = p.get("text") or p.get("passage") or p.get("content")
                 if txt:
                     chunks.append(str(txt).strip())
-    return [c for c in chunks if c]
+    chunks = [c for c in chunks if c]
+    if max_chunk_words > 0:
+        chunks = [_truncate_to_words(c, max_chunk_words) for c in chunks]
+    return chunks
 
 
-def _convert_row_to_rag_example(row: Dict[str, Any], max_chunks: int) -> Optional[RAGExample]:
+def _convert_row_to_rag_example(row: Dict[str, Any], max_chunks: int,
+                                max_chunk_words: int = 0) -> Optional[RAGExample]:
     question = None
     for key in ["question", "query", "input", "prompt"]:
         if key in row and row[key]:
@@ -93,7 +110,7 @@ def _convert_row_to_rag_example(row: Dict[str, Any], max_chunks: int) -> Optiona
     if not question:
         return None
 
-    chunks = _extract_chunks_from_row(row)[:max_chunks]
+    chunks = _extract_chunks_from_row(row, max_chunk_words=max_chunk_words)[:max_chunks]
     if not chunks:
         return None
 
@@ -239,7 +256,11 @@ def load_examples(config: DataLoadConfig) -> List[Any]:
     examples: List[Any] = []
     for row in ds:
         if config.workload == "rag":
-            ex = _convert_row_to_rag_example(row, max_chunks=config.max_chunks)
+            ex = _convert_row_to_rag_example(
+                row,
+                max_chunks=config.max_chunks,
+                max_chunk_words=config.max_chunk_words,
+            )
         else:
             ex = _convert_row_to_scientific_example(row)
         if ex is not None:

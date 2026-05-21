@@ -55,6 +55,7 @@ class BuildConfig:
     llm_seed: Optional[int]
     min_chunks: int = 3
     max_chunks: int = 4
+    max_chunk_words: int = 200
 
 def build_dataset(config: BuildConfig) -> Path:
     load_cfg = DataLoadConfig(
@@ -70,6 +71,7 @@ def build_dataset(config: BuildConfig) -> Path:
         load_processed_path=config.load_processed_path,
         min_chunks=config.min_chunks,
         max_chunks=config.max_chunks,
+        max_chunk_words=config.max_chunk_words,
         distractor_seed=config.llm_seed or 0,
     )
     examples = load_examples(load_cfg)
@@ -183,6 +185,9 @@ def parse_args() -> BuildConfig:
     p.add_argument("--min-chunks", type=int, default=3,
                    help="Minimum retrieved_chunks per RAG example; pads with distractors if fewer.")
     p.add_argument("--max-chunks", type=int, default=4)
+    p.add_argument("--max-chunk-words", type=int, default=200,
+                   help="Per-chunk word cap (0 disables). Only used when loading "
+                        "examples directly from HF, not when --load-processed-path is set.")
     p.add_argument("--llm-backend", default="mock")
     p.add_argument("--llm-model", default="mock-model")
     p.add_argument("--llm-temperature", type=float, default=0.0)

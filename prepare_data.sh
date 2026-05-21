@@ -32,6 +32,11 @@ SPLIT="${SPLIT:-train[:200]}"
 MAX_SAMPLES="${MAX_SAMPLES:-200}"
 MIN_CHUNKS="${MIN_CHUNKS:-3}"
 MAX_CHUNKS="${MAX_CHUNKS:-4}"
+# Context-budget controls. Defaults are sized for TinyLlama-1.1B (2048-token window)
+# with max_new_tokens=64 and a small margin for layout-strategy header overhead.
+MAX_CHUNK_WORDS="${MAX_CHUNK_WORDS:-200}"
+TOKENIZER_PATH="${TOKENIZER_PATH:-$MODEL_PATH}"
+MAX_PROMPT_TOKENS="${MAX_PROMPT_TOKENS:-1800}"
 
 mkdir -p "$PROCESSED_DIR"
 cd "$PROJECT_ROOT"
@@ -40,7 +45,8 @@ OUTPUT_PATH="$PROCESSED_DIR/${WORKLOAD}_examples.jsonl"
 
 echo "Preparing $WORKLOAD data:"
 echo "  dataset=$DATASET_NAME  split=$SPLIT  max_samples=$MAX_SAMPLES"
-echo "  min_chunks=$MIN_CHUNKS  max_chunks=$MAX_CHUNKS"
+echo "  min_chunks=$MIN_CHUNKS  max_chunks=$MAX_CHUNKS  max_chunk_words=$MAX_CHUNK_WORDS"
+echo "  tokenizer=$TOKENIZER_PATH  max_prompt_tokens=$MAX_PROMPT_TOKENS"
 echo "  output=$OUTPUT_PATH"
 
 python -m prompt_mutation.prepare_rag_data \
@@ -49,6 +55,9 @@ python -m prompt_mutation.prepare_rag_data \
   --max-samples "$MAX_SAMPLES" \
   --min-chunks "$MIN_CHUNKS" \
   --max-chunks "$MAX_CHUNKS" \
+  --max-chunk-words "$MAX_CHUNK_WORDS" \
+  --tokenizer-path "$TOKENIZER_PATH" \
+  --max-prompt-tokens "$MAX_PROMPT_TOKENS" \
   --output-path "$OUTPUT_PATH"
 
 echo "Done. Run sbatch jobs next (e.g. ./run_pipeline.sh)."

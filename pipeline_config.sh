@@ -14,6 +14,11 @@
 #   MUTATION_TYPE   - e.g. chunk_reorder, field_reorder, parameter_change, ...
 #   STRATEGIES      - space-separated layout names (original stable_first stable_first_normalized volatile_last)
 #   CACHE_MODES     - space-separated; subset of "off on"
+#
+# Login-node-only knobs (consumed by prepare_data.sh):
+#   MAX_CHUNK_WORDS   - per-chunk word cap during extraction (default 200)
+#   TOKENIZER_PATH    - tokenizer used for the prompt-budget filter (default $MODEL_PATH)
+#   MAX_PROMPT_TOKENS - drop prompts longer than this after rendering (default 1800)
 
 : "${SLURM_ACCOUNT:=def-mmehride}"
 
