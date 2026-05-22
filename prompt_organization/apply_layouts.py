@@ -23,11 +23,11 @@ def apply_layout(records: List[PromptRecord], strategy_name: str) -> List[Prompt
     out = []
     for rec in records:
         if rec.workload == "rag":
-            base_org = strategy.organize_rag(rec.base_prompt)
-            mutated_org = strategy.organize_rag(rec.mutated_prompt)
+            base_org = strategy.organize_rag(rec.base_prompt, mutation_type=rec.mutation_type)
+            mutated_org = strategy.organize_rag(rec.mutated_prompt, mutation_type=rec.mutation_type)
         elif rec.workload == "scientific":
-            base_org = strategy.organize_scientific(rec.base_prompt)
-            mutated_org = strategy.organize_scientific(rec.mutated_prompt)
+            base_org = strategy.organize_scientific(rec.base_prompt, mutation_type=rec.mutation_type)
+            mutated_org = strategy.organize_scientific(rec.mutated_prompt, mutation_type=rec.mutation_type)
         else:
             raise ValueError(f"Unsupported workload: {rec.workload}")
 

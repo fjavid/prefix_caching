@@ -70,13 +70,17 @@ def merge_cache_on_off(df: pd.DataFrame) -> pd.DataFrame:
         "followup_tokens_per_second": "tps_off",
     })
 
-    key_cols = ["case_id"]
+    # case_id alone is NOT unique once multiple layouts are stacked into the same
+    # DataFrame: the same case_id appears once per (layout_strategy, cache_mode).
+    # Joining on case_id only would do a cross product over layouts. We must join
+    # on (case_id, layout_strategy) so cache_on and cache_off come from the same
+    # layout run.
+    key_cols = ["case_id", "layout_strategy"]
     meta_cols = [
         "workload",
         "semantic_class",
         "mutation_type",
         "relation",
-        "layout_strategy",
         "first_divergence_token",
         "token_shared_prefix_ratio",
         "sequence_match_ratio",
@@ -85,10 +89,20 @@ def merge_cache_on_off(df: pd.DataFrame) -> pd.DataFrame:
         "severity_combined_score",
     ]
 
+    dup_on = cache_on.duplicated(subset=key_cols).sum()
+    dup_off = cache_off.duplicated(subset=key_cols).sum()
+    if dup_on or dup_off:
+        raise ValueError(
+            f"Duplicate (case_id, layout_strategy) rows detected before merge: "
+            f"cache_on={dup_on}, cache_off={dup_off}. Re-running the benchmark with "
+            "a unique output path per (layout_strategy, cache_mode) should fix this."
+        )
+
     merged = cache_on[key_cols + meta_cols + ["ttft_on", "latency_on", "tps_on"]].merge(
         cache_off[key_cols + ["ttft_off", "latency_off", "tps_off"]],
         on=key_cols,
         how="inner",
+        validate="one_to_one",
     )
 
     merged["latency_gain_seconds"] = merged["latency_off"] - merged["latency_on"]
