@@ -43,11 +43,22 @@ else
   async_flag="--no-async-ttft"
 fi
 
+# Reset the prefix KV cache between cases so each (base, followup) pair starts
+# clean. Required for a meaningful unrelated_control noise floor. Set
+# RESET_CACHE_BETWEEN_CASES=0 only to reproduce the older contaminated runs.
+RESET_CACHE_BETWEEN_CASES="${RESET_CACHE_BETWEEN_CASES:-1}"
+if [[ "$RESET_CACHE_BETWEEN_CASES" -eq 1 ]]; then
+  reset_flag="--reset-cache-between-cases"
+else
+  reset_flag="--no-reset-cache-between-cases"
+fi
+
 echo "Benchmark grid:"
-echo "  strategies      = $RUN_STRATEGIES"
-echo "  cache_modes     = $RUN_CACHE_MODES"
-echo "  model           = $MODEL_PATH"
-echo "  use_async_ttft  = $USE_ASYNC_TTFT"
+echo "  strategies                  = $RUN_STRATEGIES"
+echo "  cache_modes                 = $RUN_CACHE_MODES"
+echo "  model                       = $MODEL_PATH"
+echo "  use_async_ttft              = $USE_ASYNC_TTFT"
+echo "  reset_cache_between_cases   = $RESET_CACHE_BETWEEN_CASES"
 
 for strategy in $RUN_STRATEGIES; do
   input_jsonl="$(layout_jsonl_path "$strategy")"
@@ -68,6 +79,7 @@ for strategy in $RUN_STRATEGIES; do
       --model-name "$MODEL_PATH" \
       $cache_flag \
       $async_flag \
+      $reset_flag \
       --mutation-jsonl-path "$input_jsonl" \
       --output-dir "$BENCH_DIR" \
       --run-name "$run_name"

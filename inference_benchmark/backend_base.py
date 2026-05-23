@@ -52,5 +52,15 @@ class BackendBase:
     def generate(self, prompt: str, request_id: Optional[str] = None) -> GenerationResult:
         raise NotImplementedError
 
+    def reset_prefix_cache(self) -> bool:
+        """Flush the engine's prefix KV cache between cases.
+
+        Subclasses should override. Returns True if the reset actually
+        happened, False if the backend has no working reset path (in which
+        case the caller may want to log a warning since experimental
+        isolation between cases is then NOT guaranteed).
+        """
+        return False
+
     def backend_name(self) -> str:
         raise NotImplementedError

@@ -21,6 +21,10 @@ class BackendConfig:
     trust_remote_code: bool = False
     use_async_ttft: bool = True
     warmup_iters: int = 2
+    # Reset the prefix cache between cases so each (base, followup) pair is
+    # measured against an empty cache. Prevents cross-case contamination, e.g.
+    # unrelated_control followups hitting blocks left over from earlier cases.
+    reset_cache_between_cases: bool = True
 
 
 @dataclass

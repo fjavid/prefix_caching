@@ -28,11 +28,24 @@ class InferenceRunner:
     engine warmup cost (CUDA graph capture, KV allocation, etc.) so we
     explicitly run a warmup pass before the measured loop and tag those
     metrics with phase='warmup' so the analysis layer can drop them.
+
+    If reset_cache_between_cases=True (default) the runner calls
+    backend.reset_prefix_cache() BEFORE every case, so each (base, followup)
+    pair starts with an empty KV cache. Without this, every case after the
+    first sees cache state from prior cases, which contaminates the
+    unrelated_control noise floor in particular.
     """
 
-    def __init__(self, backend: BackendBase, warmup_iters: int = 2) -> None:
+    def __init__(
+        self,
+        backend: BackendBase,
+        warmup_iters: int = 2,
+        reset_cache_between_cases: bool = True,
+    ) -> None:
         self.backend = backend
         self.warmup_iters = max(0, warmup_iters)
+        self.reset_cache_between_cases = reset_cache_between_cases
+        self._reset_supported: Optional[bool] = None  # discovered on first call
 
     def warmup(self, cases: List[BenchmarkCase]) -> List[Dict[str, Any]]:
         """Run a few prompts solely to absorb startup cost. Results are tagged
@@ -60,6 +73,16 @@ class InferenceRunner:
         return warmup_metrics
 
     def run_case(self, case: BenchmarkCase) -> CaseRunResult:
+        if self.reset_cache_between_cases:
+            did = self.backend.reset_prefix_cache()
+            if self._reset_supported is None:
+                self._reset_supported = did
+                if not did:
+                    print(
+                        "[InferenceRunner] reset_cache_between_cases is enabled but the "
+                        "backend reported no working reset path; cases will share cache "
+                        "state. Treat unrelated_control values with caution."
+                    )
         base = self.backend.generate(case.base_prompt, request_id=case.case_id + '::base')
         followup = self.backend.generate(case.followup_prompt, request_id=case.case_id + '::followup')
 
@@ -98,4 +121,7 @@ class InferenceRunner:
 
     def run_cases(self, cases: List[BenchmarkCase]) -> List[CaseRunResult]:
         self.warmup(cases)
+        # Drop any residual KV from warmup before the first measured case.
+        if self.reset_cache_between_cases:
+            self.backend.reset_prefix_cache()
         return [self.run_case(case) for case in cases]

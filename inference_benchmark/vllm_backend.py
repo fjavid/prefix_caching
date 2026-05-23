@@ -30,6 +30,11 @@ class VLLMBackend(BackendBase):
         self.async_engine = None
         self.sampling_params = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        # Discovered at start() time: a zero-arg callable that flushes the
+        # engine's prefix KV cache, or None if no working path was found in
+        # this vLLM version. We probe once so we don't waste time per case.
+        self._reset_prefix_cache_fn: Optional[Any] = None
+        self._reset_prefix_cache_is_async: bool = False
 
     def start(self) -> None:
         from vllm import SamplingParams
@@ -68,7 +73,55 @@ class VLLMBackend(BackendBase):
                 gpu_memory_utilization=self.gpu_memory_utilization,
                 trust_remote_code=self.trust_remote_code,
             )
+        self._discover_reset_prefix_cache()
         self._started = True
+
+    def _discover_reset_prefix_cache(self) -> None:
+        """Find the right `reset_prefix_cache` entry point in this vLLM build.
+
+        vLLM has moved this method around between versions:
+          - sync LLM:  llm.llm_engine.reset_prefix_cache()
+          - sync LLM (older): llm.reset_prefix_cache()
+          - AsyncLLMEngine v0:  async_engine.engine.reset_prefix_cache()
+          - AsyncLLMEngine v1:  async_engine.reset_prefix_cache()  (coroutine)
+
+        We probe candidate paths in order, keep the first that exists, and
+        record whether it is a coroutine so the runtime call site can await
+        it correctly. If nothing matches, the field stays None and
+        reset_prefix_cache() becomes a logged no-op.
+        """
+        import inspect
+
+        candidates = []
+        if self.async_engine is not None:
+            candidates += [
+                ('async_engine.reset_prefix_cache', self.async_engine, 'reset_prefix_cache'),
+                ('async_engine.engine.reset_prefix_cache',
+                 getattr(self.async_engine, 'engine', None), 'reset_prefix_cache'),
+            ]
+        if self.llm is not None:
+            candidates += [
+                ('llm.llm_engine.reset_prefix_cache',
+                 getattr(self.llm, 'llm_engine', None), 'reset_prefix_cache'),
+                ('llm.reset_prefix_cache', self.llm, 'reset_prefix_cache'),
+            ]
+
+        for label, owner, attr in candidates:
+            if owner is None:
+                continue
+            fn = getattr(owner, attr, None)
+            if callable(fn):
+                self._reset_prefix_cache_fn = fn
+                self._reset_prefix_cache_is_async = inspect.iscoroutinefunction(fn)
+                print(f"[VLLMBackend] reset_prefix_cache via {label} "
+                      f"(async={self._reset_prefix_cache_is_async})")
+                return
+
+        print(
+            "[VLLMBackend] WARNING: no reset_prefix_cache entry point found in "
+            "this vLLM build; cross-case cache contamination will NOT be cleared. "
+            "Consider upgrading vLLM, or expect a non-zero unrelated_control noise floor."
+        )
 
     def stop(self) -> None:
         if self._loop is not None:
@@ -151,6 +204,25 @@ class VLLMBackend(BackendBase):
             output_tokens=output_tokens,
             raw={'request_id': request_id, 'mode': 'async'},
         )
+
+    def reset_prefix_cache(self) -> bool:
+        if self._reset_prefix_cache_fn is None:
+            return False
+        try:
+            if self._reset_prefix_cache_is_async:
+                if self._loop is None:
+                    # Should not happen: async reset implies AsyncLLMEngine path.
+                    return False
+                self._loop.run_until_complete(self._reset_prefix_cache_fn())
+            else:
+                self._reset_prefix_cache_fn()
+            return True
+        except Exception as e:
+            # Surface once, then disable so we don't spam the log every case.
+            print(f"[VLLMBackend] reset_prefix_cache failed: {type(e).__name__}: {e}. "
+                  "Disabling further reset attempts for this run.")
+            self._reset_prefix_cache_fn = None
+            return False
 
     def backend_name(self) -> str:
         return 'vllm'

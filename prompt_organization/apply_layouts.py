@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List
 
 from prompt_mutation.prompt_generator import PromptRecord
+from prompt_mutation.overlap_analyzer import OverlapAnalyzer
 from .layout_strategies import get_layout_strategy
 
 
@@ -20,6 +21,10 @@ def load_records(path: str) -> List[PromptRecord]:
 
 def apply_layout(records: List[PromptRecord], strategy_name: str) -> List[PromptRecord]:
     strategy = get_layout_strategy(strategy_name)
+    # The mutation step recorded overlap_metrics on the PRE-LAYOUT prompts.
+    # After we re-render with a new layout, the shared prefix and divergence
+    # point change, so we recompute them here and overwrite the stale values.
+    analyzer = OverlapAnalyzer()
     out = []
     for rec in records:
         if rec.workload == "rag":
@@ -32,6 +37,12 @@ def apply_layout(records: List[PromptRecord], strategy_name: str) -> List[Prompt
             raise ValueError(f"Unsupported workload: {rec.workload}")
 
         metadata = dict(rec.metadata)
+        # Preserve the pre-layout numbers under a different key for traceability.
+        if "overlap_metrics" in metadata:
+            metadata["overlap_metrics_pre_layout"] = metadata["overlap_metrics"]
+        metadata["overlap_metrics"] = analyzer.analyze(
+            base_org.prompt_text, mutated_org.prompt_text
+        ).to_dict()
         metadata["prompt_organization"] = {
             "strategy_name": strategy_name,
             "base_layout_metadata": base_org.metadata,

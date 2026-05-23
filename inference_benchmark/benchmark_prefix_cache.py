@@ -49,7 +49,11 @@ def run_benchmark(config: BenchmarkConfig) -> Path:
 
     backend = make_backend(config.backend)
     backend.start()
-    runner = InferenceRunner(backend, warmup_iters=config.backend.warmup_iters)
+    runner = InferenceRunner(
+        backend,
+        warmup_iters=config.backend.warmup_iters,
+        reset_cache_between_cases=config.backend.reset_cache_between_cases,
+    )
     results = runner.run_cases(cases)
     backend.stop()
 
@@ -90,6 +94,13 @@ def parse_args() -> BenchmarkConfig:
                    help='Fall back to offline LLM.generate; TTFT will be None.')
     p.add_argument('--warmup-iters', type=int, default=2,
                    help='Number of warmup requests run (and tagged) before the measured loop.')
+    p.add_argument('--reset-cache-between-cases', action='store_true', default=True,
+                   help='Reset the prefix KV cache before every (base, followup) pair '
+                        '(default). Prevents cross-case contamination of unrelated_control.')
+    p.add_argument('--no-reset-cache-between-cases', dest='reset_cache_between_cases',
+                   action='store_false',
+                   help='Disable per-case cache reset. Use only to reproduce the '
+                        'pre-fix behavior where cases share cache state.')
 
     p.add_argument('--mutation-jsonl-path', required=True)
     p.add_argument('--max-cases', type=int, default=None)
@@ -122,6 +133,7 @@ def parse_args() -> BenchmarkConfig:
             trust_remote_code=args.trust_remote_code,
             use_async_ttft=args.use_async_ttft,
             warmup_iters=args.warmup_iters,
+            reset_cache_between_cases=args.reset_cache_between_cases,
         ),
         dataset=DatasetConfig(
             mutation_jsonl_path=args.mutation_jsonl_path,
