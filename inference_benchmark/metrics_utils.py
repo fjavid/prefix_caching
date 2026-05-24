@@ -18,8 +18,9 @@ class RequestMetrics:
     model_name: str
     cache_enabled: bool
     phase: str
+    # See GenerationResult for the precise definitions.
     ttft_seconds: Optional[float]
-    latency_seconds: float
+    wall_clock_seconds: float
     prompt_tokens: Optional[int]
     output_tokens: Optional[int]
     tokens_per_second: Optional[float]
@@ -36,7 +37,7 @@ def build_request_metrics(
     cache_enabled: bool,
     phase: str,
     ttft_seconds: Optional[float],
-    latency_seconds: float,
+    wall_clock_seconds: float,
     prompt_tokens: Optional[int],
     output_tokens: Optional[int],
 ) -> RequestMetrics:
@@ -48,8 +49,8 @@ def build_request_metrics(
         cache_enabled=cache_enabled,
         phase=phase,
         ttft_seconds=ttft_seconds,
-        latency_seconds=latency_seconds,
+        wall_clock_seconds=wall_clock_seconds,
         prompt_tokens=prompt_tokens,
         output_tokens=output_tokens,
-        tokens_per_second=safe_div(output_tokens or 0, latency_seconds),
+        tokens_per_second=safe_div(output_tokens or 0, wall_clock_seconds),
     )

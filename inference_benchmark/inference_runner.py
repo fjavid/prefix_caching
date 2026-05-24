@@ -65,7 +65,7 @@ class InferenceRunner:
                     cache_enabled=self.backend.enable_prefix_caching,
                     phase='warmup',
                     ttft_seconds=res.ttft_seconds,
-                    latency_seconds=res.latency_seconds,
+                    wall_clock_seconds=res.wall_clock_seconds,
                     prompt_tokens=res.prompt_tokens,
                     output_tokens=res.output_tokens,
                 ).to_dict()
@@ -94,7 +94,7 @@ class InferenceRunner:
             cache_enabled=self.backend.enable_prefix_caching,
             phase='base',
             ttft_seconds=base.ttft_seconds,
-            latency_seconds=base.latency_seconds,
+            wall_clock_seconds=base.wall_clock_seconds,
             prompt_tokens=base.prompt_tokens,
             output_tokens=base.output_tokens,
         )
@@ -106,7 +106,7 @@ class InferenceRunner:
             cache_enabled=self.backend.enable_prefix_caching,
             phase='followup',
             ttft_seconds=followup.ttft_seconds,
-            latency_seconds=followup.latency_seconds,
+            wall_clock_seconds=followup.wall_clock_seconds,
             prompt_tokens=followup.prompt_tokens,
             output_tokens=followup.output_tokens,
         )
@@ -119,9 +119,18 @@ class InferenceRunner:
             followup_metrics=followup_metrics.to_dict(),
         )
 
-    def run_cases(self, cases: List[BenchmarkCase]) -> List[CaseRunResult]:
-        self.warmup(cases)
-        # Drop any residual KV from warmup before the first measured case.
-        if self.reset_cache_between_cases:
-            self.backend.reset_prefix_cache()
+    def run_cases(self, cases: List[BenchmarkCase], do_warmup: bool = True) -> List[CaseRunResult]:
+        """Run every case sequentially and return the per-case result list.
+
+        do_warmup: when True (default) the runner runs `warmup_iters` warmup
+        requests at the start and resets the cache before the first measured
+        case. When False, this preamble is skipped. Set False when this is
+        the second or later batch on an already-warmed engine (e.g. the
+        single-engine multi-layout sweep) so warmup cost is paid once per
+        engine instead of once per layout.
+        """
+        if do_warmup:
+            self.warmup(cases)
+            if self.reset_cache_between_cases:
+                self.backend.reset_prefix_cache()
         return [self.run_case(case) for case in cases]

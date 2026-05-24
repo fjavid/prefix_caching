@@ -219,9 +219,9 @@ def make_cross_category_plots(merged: pd.DataFrame, out_dir: Path, metric: str) 
         value_label=metric,
     )
 
-    # 2) Heatmap speedup_ratio (only meaningful if we have latency columns; metric != speedup).
-    if {"latency_on", "latency_off"}.issubset(pr.columns) and metric != "latency_speedup_ratio":
-        pr["_speedup"] = pr["latency_off"] / pr["latency_on"]
+    # 2) Heatmap speedup_ratio (only meaningful if we have wall_clock columns; metric != speedup).
+    if {"wall_clock_on", "wall_clock_off"}.issubset(pr.columns) and metric != "wall_clock_speedup_ratio":
+        pr["_speedup"] = pr["wall_clock_off"] / pr["wall_clock_on"]
         pivot_sp = pr.pivot_table(index="mutation_type", columns="layout_strategy",
                                   values="_speedup", aggfunc="median")
         # Speedup is centered at 1 (no cache benefit), not 0.
@@ -339,13 +339,13 @@ def make_all_plots(merged: pd.DataFrame, out_dir: Path, metric: str) -> None:
             x_label="First divergence token", y_label=metric,
         )
 
-    if {"latency_off", "latency_on"}.issubset(merged.columns):
+    if {"wall_clock_off", "wall_clock_on"}.issubset(merged.columns):
         _scatter(
-            merged.dropna(subset=["latency_off", "latency_on"]),
-            x="latency_off", y="latency_on", hue="layout_strategy",
-            out_path=out_dir / "latency_on_vs_off_by_layout.png",
-            title="Cache-on latency vs cache-off latency",
-            x_label="latency_off (s)", y_label="latency_on (s)",
+            merged.dropna(subset=["wall_clock_off", "wall_clock_on"]),
+            x="wall_clock_off", y="wall_clock_on", hue="layout_strategy",
+            out_path=out_dir / "wall_clock_on_vs_off_by_layout.png",
+            title="Cache-on wall-clock vs cache-off wall-clock",
+            x_label="wall_clock_off (s)", y_label="wall_clock_on (s)",
         )
 
     if pr["mutation_type"].nunique() > 1:
@@ -368,8 +368,8 @@ def main() -> None:
     p.add_argument("--merged-csv", required=True,
                    help="Combined merged CSV across all strategies.")
     p.add_argument("--output-dir", required=True)
-    p.add_argument("--metric", default="latency_gain_seconds",
-                   choices=["latency_gain_seconds", "latency_speedup_ratio",
+    p.add_argument("--metric", default="wall_clock_gain_seconds",
+                   choices=["wall_clock_gain_seconds", "wall_clock_speedup_ratio",
                             "ttft_gain_seconds", "ttft_speedup_ratio"])
     args = p.parse_args()
     merged = pd.read_csv(args.merged_csv)

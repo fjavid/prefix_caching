@@ -45,7 +45,7 @@ for strategy in $STRATEGIES; do
   done
 done
 
-METRIC="${METRIC:-latency_gain_seconds}"
+METRIC="${METRIC:-wall_clock_gain_seconds}"
 
 echo "Analyzing $((${#INPUT_PATHS[@]})) result files with metric=$METRIC"
 

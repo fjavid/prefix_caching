@@ -40,10 +40,10 @@ def load_benchmark_jsonl(path: str) -> pd.DataFrame:
                 "relation": case.get("relation"),
                 "cache_enabled": follow.get("cache_enabled"),
                 "followup_ttft_seconds": follow.get("ttft_seconds"),
-                "followup_latency_seconds": follow.get("latency_seconds"),
+                "followup_wall_clock_seconds": follow.get("wall_clock_seconds"),
                 "followup_tokens_per_second": follow.get("tokens_per_second"),
                 "base_ttft_seconds": base_metrics.get("ttft_seconds"),
-                "base_latency_seconds": base_metrics.get("latency_seconds"),
+                "base_wall_clock_seconds": base_metrics.get("wall_clock_seconds"),
                 "layout_strategy": prompt_org.get("strategy_name", "unknown"),
                 "first_divergence_token": overlap.get("first_divergence_token"),
                 "token_shared_prefix_ratio": overlap.get("token_shared_prefix_ratio"),
@@ -61,12 +61,12 @@ def merge_cache_on_off(df: pd.DataFrame) -> pd.DataFrame:
 
     cache_on = cache_on.rename(columns={
         "followup_ttft_seconds": "ttft_on",
-        "followup_latency_seconds": "latency_on",
+        "followup_wall_clock_seconds": "wall_clock_on",
         "followup_tokens_per_second": "tps_on",
     })
     cache_off = cache_off.rename(columns={
         "followup_ttft_seconds": "ttft_off",
-        "followup_latency_seconds": "latency_off",
+        "followup_wall_clock_seconds": "wall_clock_off",
         "followup_tokens_per_second": "tps_off",
     })
 
@@ -98,15 +98,18 @@ def merge_cache_on_off(df: pd.DataFrame) -> pd.DataFrame:
             "a unique output path per (layout_strategy, cache_mode) should fix this."
         )
 
-    merged = cache_on[key_cols + meta_cols + ["ttft_on", "latency_on", "tps_on"]].merge(
-        cache_off[key_cols + ["ttft_off", "latency_off", "tps_off"]],
+    merged = cache_on[key_cols + meta_cols + ["ttft_on", "wall_clock_on", "tps_on"]].merge(
+        cache_off[key_cols + ["ttft_off", "wall_clock_off", "tps_off"]],
         on=key_cols,
         how="inner",
         validate="one_to_one",
     )
 
-    merged["latency_gain_seconds"] = merged["latency_off"] - merged["latency_on"]
-    merged["latency_speedup_ratio"] = merged["latency_off"] / merged["latency_on"]
+    # wall_clock_gain = end-to-end seconds saved by prefix caching (prefill+decode).
+    # ttft_gain = seconds saved on the prefill stage alone, which is the part
+    # prefix caching directly affects; prefer this when reasoning about cache.
+    merged["wall_clock_gain_seconds"] = merged["wall_clock_off"] - merged["wall_clock_on"]
+    merged["wall_clock_speedup_ratio"] = merged["wall_clock_off"] / merged["wall_clock_on"]
 
     if merged["ttft_on"].notna().any() and merged["ttft_off"].notna().any():
         merged["ttft_gain_seconds"] = merged["ttft_off"] - merged["ttft_on"]
@@ -176,7 +179,7 @@ def _recovery_vs_baseline(
     return out
 
 
-def summarize(merged: pd.DataFrame, metric: str = "latency_gain_seconds") -> Dict[str, Any]:
+def summarize(merged: pd.DataFrame, metric: str = "wall_clock_gain_seconds") -> Dict[str, Any]:
     if merged.empty:
         return {"note": "No rows after merging cache-on and cache-off results."}
 
@@ -242,8 +245,8 @@ def main() -> None:
                    help="Benchmark JSONL files (cache_on and cache_off; can include all strategies).")
     p.add_argument("--output-dir", required=True)
     p.add_argument("--prefix", default="analysis")
-    p.add_argument("--metric", default="latency_gain_seconds",
-                   choices=["latency_gain_seconds", "latency_speedup_ratio",
+    p.add_argument("--metric", default="wall_clock_gain_seconds",
+                   choices=["wall_clock_gain_seconds", "wall_clock_speedup_ratio",
                             "ttft_gain_seconds", "ttft_speedup_ratio"])
     args = p.parse_args()
 

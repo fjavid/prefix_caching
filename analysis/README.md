@@ -20,7 +20,7 @@ Analyze benchmark results to identify:
   - `*_by_relation_and_layout.png` — grouped bar: mean gain per relation x layout
   - `*_box_partial_reuse_by_layout.png` — distribution box per layout
   - `*_vs_first_divergence_partial_reuse.png` — scatter vs divergence point
-  - `latency_on_vs_off_by_layout.png` — sanity diagonal
+  - `wall_clock_on_vs_off_by_layout.png` — sanity diagonal
   - `*_by_mutation_type_partial_reuse.png` — mean gain per mutation_type
   - `cross_category/` subdirectory:
     - `*_heatmap_mutation_x_layout.png` — diverging heatmap, mean gain
@@ -49,20 +49,22 @@ python -m analysis.analyze_prefix_cache \
   --input-paths \
     $SCRATCH/prefix_caching/benchmark_results/rag_chunk_reorder_original_cache_{off,on}.jsonl \
     $SCRATCH/prefix_caching/benchmark_results/rag_chunk_reorder_stable_first_cache_{off,on}.jsonl \
-    $SCRATCH/prefix_caching/benchmark_results/rag_chunk_reorder_stable_first_normalized_cache_{off,on}.jsonl \
   --output-dir $SCRATCH/prefix_caching/analysis \
   --prefix rag_chunk_reorder \
-  --metric latency_gain_seconds
+  --metric wall_clock_gain_seconds
 
 python -m analysis.plot_prefix_cache_results \
   --merged-csv $SCRATCH/prefix_caching/analysis/rag_chunk_reorder.merged.csv \
   --output-dir $SCRATCH/prefix_caching/analysis/plots_rag_chunk_reorder \
-  --metric latency_gain_seconds
+  --metric wall_clock_gain_seconds
 ```
 
-The metric flag accepts `latency_gain_seconds`, `latency_speedup_ratio`,
-`ttft_gain_seconds`, or `ttft_speedup_ratio` (TTFT requires the async vLLM
-backend; see `inference_benchmark/`).
+The metric flag accepts `wall_clock_gain_seconds`, `wall_clock_speedup_ratio`,
+`ttft_gain_seconds`, or `ttft_speedup_ratio`. `wall_clock_*` is the
+end-to-end wall-clock time per request (prefill + decode); `ttft_*` is the
+prefill-dominated time-to-first-token and is the metric most directly
+affected by prefix caching. TTFT requires the async vLLM backend
+(see `inference_benchmark/`).
 
 ## Reading the summary JSON
 

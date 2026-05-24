@@ -145,7 +145,7 @@ class VLLMBackend(BackendBase):
     def _generate_offline(self, prompt: str, request_id: Optional[str]) -> GenerationResult:
         t0 = time.perf_counter()
         outputs = self.llm.generate([prompt], self.sampling_params)
-        latency = time.perf_counter() - t0
+        wall_clock = time.perf_counter() - t0
         out = outputs[0]
         text = out.outputs[0].text if out.outputs else ''
         prompt_tokens = len(out.prompt_token_ids) if getattr(out, 'prompt_token_ids', None) else None
@@ -157,7 +157,7 @@ class VLLMBackend(BackendBase):
         return GenerationResult(
             text=text,
             ttft_seconds=None,
-            latency_seconds=latency,
+            wall_clock_seconds=wall_clock,
             prompt_tokens=prompt_tokens,
             output_tokens=output_tokens,
             raw={'request_id': request_id, 'mode': 'offline'},
@@ -183,11 +183,11 @@ class VLLMBackend(BackendBase):
                     ttft = time.perf_counter() - t0
                 prev_token_count = cur_tokens
             last_output = request_output
-        latency = time.perf_counter() - t0
+        wall_clock = time.perf_counter() - t0
 
         if last_output is None or not last_output.outputs:
             return GenerationResult(
-                text='', ttft_seconds=ttft, latency_seconds=latency,
+                text='', ttft_seconds=ttft, wall_clock_seconds=wall_clock,
                 raw={'request_id': request_id, 'mode': 'async', 'empty': True},
             )
         text = last_output.outputs[0].text
@@ -199,7 +199,7 @@ class VLLMBackend(BackendBase):
         return GenerationResult(
             text=text,
             ttft_seconds=ttft,
-            latency_seconds=latency,
+            wall_clock_seconds=wall_clock,
             prompt_tokens=prompt_tokens,
             output_tokens=output_tokens,
             raw={'request_id': request_id, 'mode': 'async'},

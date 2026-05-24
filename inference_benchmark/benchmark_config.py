@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, List
 
@@ -28,8 +28,18 @@ class BackendConfig:
 
 
 @dataclass
+class LayoutTask:
+    """One (layout_name, mutation_jsonl) pair to run in the engine sweep."""
+    layout_name: str
+    mutation_jsonl_path: str
+
+
+@dataclass
 class DatasetConfig:
-    mutation_jsonl_path: str = ""
+    # The benchmark stage runs ONE engine per (cache_mode) and sweeps every
+    # layout listed here back-to-back on that same engine. Each task writes a
+    # separate output JSONL named via `OutputConfig.run_name_template`.
+    layout_tasks: List[LayoutTask] = field(default_factory=list)
     max_cases: Optional[int] = None
     shard_index: int = 0
     num_shards: int = 1
@@ -39,7 +49,10 @@ class DatasetConfig:
 @dataclass
 class OutputConfig:
     output_dir: str = _DEFAULT_BENCHMARK_OUTPUT_DIR
-    run_name: str = "prefix_cache_benchmark_run"
+    # Template containing `{layout}` (and optionally other placeholders the
+    # caller fills in). One JSONL file per layout_task is written using
+    # template.format(layout=layout_name).
+    run_name_template: str = "prefix_cache_benchmark_{layout}"
 
 
 @dataclass

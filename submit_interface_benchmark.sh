@@ -53,6 +53,17 @@ else
   reset_flag="--no-reset-cache-between-cases"
 fi
 
+# Validate that every (strategy) layout JSONL exists before we boot any engine.
+layout_jsonls=()
+for strategy in $RUN_STRATEGIES; do
+  p="$(layout_jsonl_path "$strategy")"
+  if [[ ! -f "$p" ]]; then
+    echo "ERROR: layout JSONL not found: $p" >&2
+    exit 1
+  fi
+  layout_jsonls+=("$p")
+done
+
 echo "Benchmark grid:"
 echo "  strategies                  = $RUN_STRATEGIES"
 echo "  cache_modes                 = $RUN_CACHE_MODES"
@@ -60,28 +71,29 @@ echo "  model                       = $MODEL_PATH"
 echo "  use_async_ttft              = $USE_ASYNC_TTFT"
 echo "  reset_cache_between_cases   = $RESET_CACHE_BETWEEN_CASES"
 
-for strategy in $RUN_STRATEGIES; do
-  input_jsonl="$(layout_jsonl_path "$strategy")"
-  if [[ ! -f "$input_jsonl" ]]; then
-    echo "ERROR: layout JSONL not found: $input_jsonl" >&2
-    exit 1
-  fi
-  for cache_mode in $RUN_CACHE_MODES; do
-    case "$cache_mode" in
-      on)  cache_flag="--enable-prefix-caching" ;;
-      off) cache_flag="--disable-prefix-caching" ;;
-      *)   echo "ERROR: invalid cache_mode='$cache_mode'" >&2; exit 1 ;;
-    esac
-    run_name="$(benchmark_run_name "$strategy" "$cache_mode")"
-    echo "=== strategy=$strategy cache=$cache_mode -> $run_name ==="
-    python -m inference_benchmark.benchmark_prefix_cache \
-      --backend-name vllm \
-      --model-name "$MODEL_PATH" \
-      $cache_flag \
-      $async_flag \
-      $reset_flag \
-      --mutation-jsonl-path "$input_jsonl" \
-      --output-dir "$BENCH_DIR" \
-      --run-name "$run_name"
-  done
+# ONE engine per cache_mode (vLLM's enable_prefix_caching is set at engine
+# construction time and can't be toggled at runtime, so we need a separate
+# engine for cache_on vs cache_off). Inside each engine we sweep every
+# layout back-to-back; this removes the per-layout engine-startup variance
+# that contaminated earlier runs.
+for cache_mode in $RUN_CACHE_MODES; do
+  case "$cache_mode" in
+    on)  cache_flag="--enable-prefix-caching" ;;
+    off) cache_flag="--disable-prefix-caching" ;;
+    *)   echo "ERROR: invalid cache_mode='$cache_mode'" >&2; exit 1 ;;
+  esac
+
+  run_name_template="${TAG}_{layout}_cache_${cache_mode}"
+  echo "=== cache=$cache_mode  layouts=[$RUN_STRATEGIES]  template=$run_name_template ==="
+
+  python -m inference_benchmark.benchmark_prefix_cache \
+    --backend-name vllm \
+    --model-name "$MODEL_PATH" \
+    $cache_flag \
+    $async_flag \
+    $reset_flag \
+    --layouts $RUN_STRATEGIES \
+    --mutation-jsonls "${layout_jsonls[@]}" \
+    --output-dir "$BENCH_DIR" \
+    --run-name-template "$run_name_template"
 done

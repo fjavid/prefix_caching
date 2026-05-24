@@ -7,8 +7,15 @@ from typing import Any, Dict, Optional
 @dataclass
 class GenerationResult:
     text: str
+    # Time from first prompt token sent to first output token received.
+    # This is the metric most directly affected by prefix caching (it's
+    # prefill-dominated).
     ttft_seconds: Optional[float]
-    latency_seconds: float
+    # End-to-end wall-clock time from request submission to last output
+    # token. Includes both prefill and decode. Renamed from "latency" so
+    # nobody confuses it with the more specific "latency = TTFT" used in
+    # serving literature.
+    wall_clock_seconds: float
     prompt_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     raw: Optional[Dict[str, Any]] = None

@@ -31,7 +31,7 @@ source "$SCRIPT_DIR/pipeline_config.sh"
 # Override directories for local runs that don't have $SCRATCH/prefix_caching.
 RESULTS_ROOT="${RESULTS_ROOT:-$SCRATCH_ROOT/benchmark_results}"
 ANALYSIS_DIR="${ANALYSIS_DIR:-$SCRATCH_ROOT/analysis}"
-METRIC="${METRIC:-latency_gain_seconds}"
+METRIC="${METRIC:-wall_clock_gain_seconds}"
 
 if [[ ! -d "$RESULTS_ROOT" ]]; then
   echo "ERROR: RESULTS_ROOT not found: $RESULTS_ROOT" >&2
@@ -45,7 +45,9 @@ INPUT_PATHS=()
 MISSING=()
 for strategy in $STRATEGIES; do
   for mode in $CACHE_MODES; do
-    p="$RESULTS_ROOT/${TAG}_${strategy}_${mode}.jsonl"
+    # Use the same naming convention as the SLURM benchmark stage so the two
+    # entry points always look in the same place.
+    p="$RESULTS_ROOT/$(benchmark_run_name "$strategy" "$mode").jsonl"
     if [[ -f "$p" ]]; then
       INPUT_PATHS+=("$p")
     else

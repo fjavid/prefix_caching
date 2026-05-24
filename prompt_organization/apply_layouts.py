@@ -77,7 +77,7 @@ def save_records(records: List[PromptRecord], output_path: str) -> Path:
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--input-path", required=True)
-    p.add_argument("--strategy-name", required=True, choices=["original", "stable_first", "stable_first_normalized", "volatile_last"])
+    p.add_argument("--strategy-name", required=True, choices=["original", "stable_first", "volatile_last"])
     p.add_argument("--output-path", required=True)
     args = p.parse_args()
 

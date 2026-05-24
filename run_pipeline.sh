@@ -6,7 +6,7 @@
 #   SEMANTIC_CLASS    = meaning_preserving
 #   GENERATION_CLASS  = algorithmic
 #   MUTATION_TYPE     = chunk_reorder
-#   STRATEGIES        = "original stable_first stable_first_normalized"
+#   STRATEGIES        = "original stable_first"
 #   CACHE_MODES       = "off on"
 #
 # All knobs are overridable by exporting env vars before invocation.

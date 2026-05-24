@@ -12,7 +12,7 @@
 #   SEMANTIC_CLASS  - meaning_preserving | meaning_changing
 #   GENERATION_CLASS- algorithmic | llm_generated
 #   MUTATION_TYPE   - e.g. chunk_reorder, field_reorder, parameter_change, ...
-#   STRATEGIES      - space-separated layout names (original stable_first stable_first_normalized volatile_last)
+#   STRATEGIES      - space-separated layout names (original stable_first volatile_last)
 #   CACHE_MODES     - space-separated; subset of "off on"
 #
 # Login-node-only knobs (consumed by prepare_data.sh):
@@ -31,7 +31,7 @@
 : "${GENERATION_CLASS:=algorithmic}"
 : "${MUTATION_TYPE:=chunk_reorder}"
 
-: "${STRATEGIES:=original stable_first stable_first_normalized}"
+: "${STRATEGIES:=original stable_first}"
 : "${CACHE_MODES:=off on}"
 
 # Derived paths

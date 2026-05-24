@@ -202,18 +202,6 @@ def _scientific_order_for_volatile(volatile: Optional[str]) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
-# Normalization.
-# ---------------------------------------------------------------------------
-
-
-def normalize_whitespace_and_headers(text: str) -> str:
-    text = re.sub(r"\r\n", "\n", text)
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
-
-
-# ---------------------------------------------------------------------------
 # Strategies.
 # ---------------------------------------------------------------------------
 
@@ -288,30 +276,6 @@ class StableFirstLayoutStrategy(BaseLayoutStrategy):
         )
 
 
-class StableFirstNormalizedLayoutStrategy(BaseLayoutStrategy):
-    name = "stable_first_normalized"
-
-    def organize_rag(self, prompt: str, mutation_type: Optional[str] = None) -> OrganizedPrompt:
-        base = StableFirstLayoutStrategy().organize_rag(prompt, mutation_type=mutation_type)
-        meta = dict(base.metadata)
-        meta["layout_rule"] = "stable-first + normalized formatting"
-        return OrganizedPrompt(
-            prompt_text=normalize_whitespace_and_headers(base.prompt_text),
-            strategy_name=self.name,
-            metadata=meta,
-        )
-
-    def organize_scientific(self, prompt: str, mutation_type: Optional[str] = None) -> OrganizedPrompt:
-        base = StableFirstLayoutStrategy().organize_scientific(prompt, mutation_type=mutation_type)
-        meta = dict(base.metadata)
-        meta["layout_rule"] = "stable-first + normalized formatting"
-        return OrganizedPrompt(
-            prompt_text=normalize_whitespace_and_headers(base.prompt_text),
-            strategy_name=self.name,
-            metadata=meta,
-        )
-
-
 class VolatileLastLayoutStrategy(BaseLayoutStrategy):
     """Alias for stable_first kept for backward compatibility with old configs."""
 
@@ -330,7 +294,6 @@ def get_layout_strategy(name: str) -> BaseLayoutStrategy:
     strategies = {
         "original": OriginalLayoutStrategy,
         "stable_first": StableFirstLayoutStrategy,
-        "stable_first_normalized": StableFirstNormalizedLayoutStrategy,
         "volatile_last": VolatileLastLayoutStrategy,
     }
     if name not in strategies:
