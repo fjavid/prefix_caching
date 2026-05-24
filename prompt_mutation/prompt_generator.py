@@ -123,15 +123,53 @@ class BaseMutator:
 
 
 class AlgorithmicMeaningPreservingMutator(BaseMutator):
+    # Word-level synonym table used by `synonym_substitution`. Keys must be the
+    # lowercase surface form and the values must be meaning-preserving in a
+    # factual-QA context. The lookup is case-insensitive and the renderer
+    # preserves the original word's leading capitalization.
+    #
+    # The original table only covered instruction-style words (`brief`,
+    # `answer`, `solve`, ...) which almost never appear in natural-questions
+    # user_queries, so substitution silently produced no change on 99% of
+    # inputs. The expanded table below adds verbs / nouns / adjectives that
+    # are common in factual question stems and includes the most-used
+    # inflections of each verb. Audited on outputs/processed/rag_examples.jsonl
+    # to ensure a high match rate (see prompt_mutation/test_mutations.ipynb).
     SYNONYMS = {
-        "brief": "concise",
-        "answer": "response",
-        "carefully": "thoroughly",
-        "main": "primary",
-        "question": "query",
-        "solve": "compute",
-        "following": "given",
-        "return": "produce",
+        # Original instruction-style pairs.
+        "brief": "concise", "answer": "response", "carefully": "thoroughly",
+        "main": "primary", "question": "query", "solve": "compute",
+        "following": "given", "return": "produce",
+        # Verbs (base / past / past-participle / 3rd-singular).
+        "begin": "start", "began": "started", "begins": "starts",
+        "happen": "occur", "happened": "occurred", "happens": "occurs",
+        "make": "create", "made": "created", "makes": "creates",
+        "find": "locate", "found": "located", "finds": "locates",
+        "use": "utilize", "used": "utilized", "uses": "utilizes",
+        "build": "construct", "built": "constructed", "builds": "constructs",
+        "show": "display", "showed": "displayed", "shows": "displays",
+        "live": "reside", "lives": "resides", "lived": "resided",
+        "call": "name", "called": "named", "calls": "names",
+        "get": "obtain", "got": "obtained", "gets": "obtains",
+        "see": "observe", "saw": "observed", "sees": "observes",
+        "die": "perish", "died": "perished", "dies": "perishes",
+        "buy": "purchase", "bought": "purchased", "buys": "purchases",
+        "own": "possess", "owned": "possessed", "owns": "possesses",
+        "win": "triumph", "won": "triumphed", "wins": "triumphs",
+        "come": "arrive", "came": "arrived", "comes": "arrives",
+        "write": "author", "wrote": "authored", "writes": "authors",
+        "give": "provide", "gave": "provided", "gives": "provides",
+        "take": "acquire", "took": "acquired", "takes": "acquires",
+        "say": "state", "said": "stated", "says": "states",
+        "play": "perform", "played": "performed", "plays": "performs",
+        # Common nouns.
+        "country": "nation", "countries": "nations",
+        "person": "individual", "people": "individuals",
+        "year": "annum", "years": "annums",
+        # Adjectives.
+        "big": "large", "small": "tiny", "old": "aged", "new": "novel",
+        "many": "numerous", "different": "distinct", "best": "finest",
+        "first": "initial", "last": "final",
     }
 
     def mutate_rag(self, base: RAGExample, mutation_type: str, mutation_severity: float = 1.0,
@@ -195,27 +233,43 @@ class AlgorithmicMeaningPreservingMutator(BaseMutator):
         return self._new_record("scientific", "meaning_preserving", "algorithmic", mutation_type, mutation_severity,
                                 base.render(), mutated.render(), {"changed_field": changed_field})
 
-    def _inject_typo(self, text: str) -> str:
+    def _inject_typo(self, text: str, max_retries: int = 16) -> str:
+        """Inject a single-character edit (swap / delete / duplicate) into
+        a random word. Retries with a different (word, op) pair if the edit
+        produces no change (e.g. swapping two identical adjacent characters
+        like 'll' in 'really'). Raises ValueError if every retry produces
+        the same string, which only happens on degenerate inputs.
+        """
         words = text.split()
-        if not words:
-            return text
-        idx = self.rng.randrange(len(words))
-        word = words[idx]
-        if len(word) < 2:
-            return text
-        op = self.rng.choice(["swap", "delete", "duplicate"])
-        chars = list(word)
-        if op == "swap" and len(chars) >= 2:
-            i = self.rng.randrange(len(chars) - 1)
-            chars[i], chars[i + 1] = chars[i + 1], chars[i]
-        elif op == "delete":
-            i = self.rng.randrange(len(chars))
-            del chars[i]
-        else:
-            i = self.rng.randrange(len(chars))
-            chars.insert(i, chars[i])
-        words[idx] = "".join(chars)
-        return " ".join(words)
+        # Words shorter than 2 chars cannot be edited meaningfully.
+        candidate_indices = [i for i, w in enumerate(words) if len(w) >= 2]
+        if not candidate_indices:
+            raise ValueError(
+                "Cannot inject a typo: every word in the input has length < 2."
+            )
+        for _ in range(max_retries):
+            idx = self.rng.choice(candidate_indices)
+            word = words[idx]
+            chars = list(word)
+            op = self.rng.choice(["swap", "delete", "duplicate"])
+            if op == "swap" and len(chars) >= 2:
+                i = self.rng.randrange(len(chars) - 1)
+                chars[i], chars[i + 1] = chars[i + 1], chars[i]
+            elif op == "delete":
+                i = self.rng.randrange(len(chars))
+                del chars[i]
+            else:
+                i = self.rng.randrange(len(chars))
+                chars.insert(i, chars[i])
+            new_word = "".join(chars)
+            if new_word != word:
+                out = list(words)
+                out[idx] = new_word
+                return " ".join(out)
+        raise ValueError(
+            f"Failed to inject a typo after {max_retries} retries; input "
+            "likely contains only words with identical adjacent characters."
+        )
 
     def _template_rewrite(self, text: str) -> str:
         rewrites = {
@@ -229,6 +283,13 @@ class AlgorithmicMeaningPreservingMutator(BaseMutator):
         return out
 
     def _synonym_substitute(self, text: str) -> str:
+        """Substitute every word that appears as a key in SYNONYMS with its
+        value, preserving the original capitalization. Raises ValueError if
+        no key matched any word in the input, because the caller has no way
+        to recover from a silent no-op (the downstream save would reject
+        base == mutated). The build script catches this and skips the
+        example so the rest of the dataset survives.
+        """
         def repl(match):
             word = match.group(0)
             lower = word.lower()
@@ -236,7 +297,14 @@ class AlgorithmicMeaningPreservingMutator(BaseMutator):
                 new_word = self.SYNONYMS[lower]
                 return new_word.capitalize() if word[0].isupper() else new_word
             return word
-        return re.sub(r"\b[A-Za-z]+\b", repl, text)
+        new_text = re.sub(r"\b[A-Za-z]+\b", repl, text)
+        if new_text == text:
+            raise ValueError(
+                "synonym_substitution: no SYNONYMS key matched any word in "
+                f"the input ({len(self.SYNONYMS)} keys tried). Consider "
+                "adding more pairs to AlgorithmicMeaningPreservingMutator.SYNONYMS."
+            )
+        return new_text
 
 
 class AlgorithmicMeaningChangingMutator(BaseMutator):

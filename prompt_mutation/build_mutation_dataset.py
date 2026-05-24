@@ -119,22 +119,31 @@ def build_dataset(config: BuildConfig) -> Path:
             candidate_chunks.extend(getattr(ex, "retrieved_chunks", []))
 
     records = []
-    for ex in examples:
-        if config.workload == "rag":
-            record = mutator.mutate_rag(
-                ex,
-                mutation_type=config.mutation_type,
-                mutation_severity=config.mutation_severity,
-                candidate_chunks=candidate_chunks,
-                llm_fn=llm_fn,
-            )
-        else:
-            record = mutator.mutate_scientific(
-                ex,
-                mutation_type=config.mutation_type,
-                mutation_severity=config.mutation_severity,
-                llm_fn=llm_fn,
-            )
+    skipped = []
+    for i, ex in enumerate(examples):
+        # A single example may legitimately fail to mutate (e.g. a query
+        # with no SYNONYMS hit, or a typo input where every word has only
+        # duplicate adjacent chars). Skip and keep going so one bad input
+        # doesn't waste an entire SLURM job.
+        try:
+            if config.workload == "rag":
+                record = mutator.mutate_rag(
+                    ex,
+                    mutation_type=config.mutation_type,
+                    mutation_severity=config.mutation_severity,
+                    candidate_chunks=candidate_chunks,
+                    llm_fn=llm_fn,
+                )
+            else:
+                record = mutator.mutate_scientific(
+                    ex,
+                    mutation_type=config.mutation_type,
+                    mutation_severity=config.mutation_severity,
+                    llm_fn=llm_fn,
+                )
+        except ValueError as e:
+            skipped.append({"example_index": i, "reason": str(e)})
+            continue
 
         overlap_metrics = analyzer.analyze(record.base_prompt, record.mutated_prompt)
         validation_result = validate_record(record, validation_cfg)
@@ -145,9 +154,24 @@ def build_dataset(config: BuildConfig) -> Path:
         record.metadata["severity"] = severity_result.to_dict()
         records.append(record)
 
+    if not records:
+        raise RuntimeError(
+            f"Every input example failed to mutate for mutation_type="
+            f"{config.mutation_type}. Sample reasons: "
+            f"{[s['reason'] for s in skipped[:3]]}"
+        )
+    if skipped:
+        print(
+            f"WARNING: skipped {len(skipped)}/{len(examples)} examples that "
+            f"failed to mutate (mutation_type={config.mutation_type}). "
+            f"First 3 reasons: {[s['reason'] for s in skipped[:3]]}"
+        )
+
     out_path = save_prompt_records(records, root_dir=config.output_root)
     summary = {
         "num_records": len(records),
+        "num_skipped": len(skipped),
+        "skipped": skipped,
         "config": asdict(config),
         "output_path": str(out_path),
     }
