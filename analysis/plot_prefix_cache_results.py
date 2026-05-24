@@ -198,6 +198,66 @@ def _faceted_grouped_bar(merged: pd.DataFrame, facet: str, x: str, hue: str, y: 
     plt.close(fig)
 
 
+def _gain_vs_shared_prefix(
+    merged: pd.DataFrame, metric: str, out_path: Path,
+) -> None:
+    """Plot the headline scaling curve: metric vs token_shared_prefix_ratio
+    on partial_reuse rows, with one marker per (mutation_type, layout_strategy)
+    combination so the asymptotic plateau near shared-prefix ratio ~1.0 is
+    visible.
+
+    Also overlays horizontal reference lines for the exact_reuse ceiling and
+    the unrelated_control noise floor (both averaged across mutations and
+    layouts). The point of this figure is to make the prefix-cache scaling
+    law obvious at a glance: cache gain rises monotonically with shared
+    prefix length and saturates near the ceiling once the prefix is ~all
+    of the prompt.
+    """
+    pr = merged[merged["relation"] == "partial_reuse"].dropna(
+        subset=["token_shared_prefix_ratio", metric]
+    )
+    if pr.empty:
+        return
+    fig, ax = plt.subplots(figsize=(9, 6))
+    # Marker shape encodes mutation_type, color encodes layout_strategy.
+    mutations = sorted(pr["mutation_type"].dropna().unique())
+    layouts = sorted(pr["layout_strategy"].dropna().unique())
+    markers = ["o", "s", "^", "D", "v", "P", "X", "*"]
+    cmap = plt.get_cmap("tab10")
+    for mi, mut in enumerate(mutations):
+        for li, layout in enumerate(layouts):
+            sub = pr[(pr["mutation_type"] == mut) & (pr["layout_strategy"] == layout)]
+            if sub.empty:
+                continue
+            ax.scatter(
+                sub["token_shared_prefix_ratio"], sub[metric],
+                marker=markers[mi % len(markers)],
+                color=cmap(li % 10),
+                alpha=0.45, s=24,
+                label=f"{mut} / {layout}",
+                edgecolors="none",
+            )
+    # Reference lines from the same merged DataFrame so the plot is self-contained.
+    exact = merged.loc[merged["relation"] == "exact_reuse", metric].dropna()
+    ctrl = merged.loc[merged["relation"] == "unrelated_control", metric].dropna()
+    if not exact.empty:
+        ax.axhline(exact.mean(), color="black", lw=1.0, ls="--",
+                   label=f"exact_reuse ceiling ({exact.mean()*1000:.2f} ms)")
+    if not ctrl.empty:
+        ax.axhline(ctrl.mean(), color="grey", lw=1.0, ls=":",
+                   label=f"unrelated_control floor ({ctrl.mean()*1000:.2f} ms)")
+    ax.axhline(0, color="black", lw=0.6)
+    ax.set_xlim(-0.02, 1.02)
+    ax.set_xlabel("token_shared_prefix_ratio (fraction of base prompt shared with mutated)")
+    ax.set_ylabel(f"{metric}  (seconds)")
+    ax.set_title(f"{metric} vs shared-prefix ratio (partial_reuse)\n"
+                 "Layout interventions move points to the right; gain saturates near 1.0")
+    ax.legend(fontsize=7, loc="best", ncol=2, framealpha=0.85)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
 def make_cross_category_plots(merged: pd.DataFrame, out_dir: Path, metric: str) -> None:
     """Plots that compare categorical slices against each other.
 
@@ -209,6 +269,12 @@ def make_cross_category_plots(merged: pd.DataFrame, out_dir: Path, metric: str) 
     pr = merged[merged["relation"] == "partial_reuse"].copy()
     if pr.empty:
         return
+
+    # 0) Headline scaling plot: gain vs shared-prefix ratio.
+    _gain_vs_shared_prefix(
+        merged, metric,
+        out_path=out_dir / f"{metric}_vs_shared_prefix_partial_reuse.png",
+    )
 
     # 1) Heatmap mutation_type x layout_strategy.
     pivot = pr.pivot_table(index="mutation_type", columns="layout_strategy",
@@ -368,9 +434,11 @@ def main() -> None:
     p.add_argument("--merged-csv", required=True,
                    help="Combined merged CSV across all strategies.")
     p.add_argument("--output-dir", required=True)
-    p.add_argument("--metric", default="wall_clock_gain_seconds",
-                   choices=["wall_clock_gain_seconds", "wall_clock_speedup_ratio",
-                            "ttft_gain_seconds", "ttft_speedup_ratio"])
+    p.add_argument("--metric", default="ttft_gain_seconds",
+                   choices=["ttft_gain_seconds", "ttft_speedup_ratio",
+                            "wall_clock_gain_seconds", "wall_clock_speedup_ratio"],
+                   help="Headline metric for plots. TTFT is preferred for prefix-cache "
+                        "analysis; wall-clock includes decode-tail noise.")
     args = p.parse_args()
     merged = pd.read_csv(args.merged_csv)
     make_all_plots(merged, Path(args.output_dir), metric=args.metric)

@@ -23,6 +23,10 @@ Analyze benchmark results to identify:
   - `wall_clock_on_vs_off_by_layout.png` — sanity diagonal
   - `*_by_mutation_type_partial_reuse.png` — mean gain per mutation_type
   - `cross_category/` subdirectory:
+    - `*_vs_shared_prefix_partial_reuse.png` — **headline scaling plot**: gain vs
+      `token_shared_prefix_ratio` with horizontal reference lines for the
+      `exact_reuse` ceiling and the `unrelated_control` noise floor. The cache
+      benefit saturates near the ceiling once shared prefix is ~1.0.
     - `*_heatmap_mutation_x_layout.png` — diverging heatmap, mean gain
     - `speedup_minus_1_heatmap_mutation_x_layout.png` — median speedup minus 1
     - `*_violin_partial_reuse_by_layout.png` — distribution shape per layout
@@ -51,19 +55,21 @@ python -m analysis.analyze_prefix_cache \
     $SCRATCH/prefix_caching/benchmark_results/rag_chunk_reorder_stable_first_cache_{off,on}.jsonl \
   --output-dir $SCRATCH/prefix_caching/analysis \
   --prefix rag_chunk_reorder \
-  --metric wall_clock_gain_seconds
+  --metric ttft_gain_seconds
 
 python -m analysis.plot_prefix_cache_results \
   --merged-csv $SCRATCH/prefix_caching/analysis/rag_chunk_reorder.merged.csv \
   --output-dir $SCRATCH/prefix_caching/analysis/plots_rag_chunk_reorder \
-  --metric wall_clock_gain_seconds
+  --metric ttft_gain_seconds
 ```
 
-The metric flag accepts `wall_clock_gain_seconds`, `wall_clock_speedup_ratio`,
-`ttft_gain_seconds`, or `ttft_speedup_ratio`. `wall_clock_*` is the
-end-to-end wall-clock time per request (prefill + decode); `ttft_*` is the
+The metric flag accepts `ttft_gain_seconds` (**default**), `ttft_speedup_ratio`,
+`wall_clock_gain_seconds`, or `wall_clock_speedup_ratio`. `ttft_*` is the
 prefill-dominated time-to-first-token and is the metric most directly
-affected by prefix caching. TTFT requires the async vLLM backend
+affected by prefix caching; `wall_clock_*` is the end-to-end request time
+(prefill + decode) and is noisier because decode time fluctuates run-to-run.
+Use TTFT for headline results and wall-clock only when you specifically
+want the end-to-end view. TTFT requires the async vLLM backend
 (see `inference_benchmark/`).
 
 ## Reading the summary JSON

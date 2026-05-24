@@ -31,7 +31,7 @@ source "$SCRIPT_DIR/pipeline_config.sh"
 # Override directories for local runs that don't have $SCRATCH/prefix_caching.
 RESULTS_ROOT="${RESULTS_ROOT:-$SCRATCH_ROOT/benchmark_results}"
 ANALYSIS_DIR="${ANALYSIS_DIR:-$SCRATCH_ROOT/analysis}"
-METRIC="${METRIC:-wall_clock_gain_seconds}"
+METRIC="${METRIC:-ttft_gain_seconds}"
 
 if [[ ! -d "$RESULTS_ROOT" ]]; then
   echo "ERROR: RESULTS_ROOT not found: $RESULTS_ROOT" >&2

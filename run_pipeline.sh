@@ -33,6 +33,14 @@
 #   SKIP_MUTATION=1 SKIP_LAYOUTS=1 ./run_pipeline.sh                   # only benchmark + analyze
 #   STRATEGIES="original stable_first" ./run_pipeline.sh               # subset of strategies
 #
+# Final-study command (after prep_login.sh + prepare_data.sh have been run on
+# the login node with MAX_SAMPLES=1000 in the data prep step):
+#   MUTATION_TYPES="chunk_reorder typo formatting synonym_substitution" \
+#     ./run_pipeline.sh
+# This submits 4 independent SLURM chains (one per mutation type), each with
+# a build_mutation -> apply_layouts -> benchmark -> analyze sequence. The
+# headline metric is ttft_gain_seconds (set in submit_analysis.sh).
+#
 # After submission, monitor with:  squeue -u $USER
 # Each stage's logs land in $PWD as <jobname>-<jobid>.out / .err
 

@@ -179,7 +179,7 @@ def _recovery_vs_baseline(
     return out
 
 
-def summarize(merged: pd.DataFrame, metric: str = "wall_clock_gain_seconds") -> Dict[str, Any]:
+def summarize(merged: pd.DataFrame, metric: str = "ttft_gain_seconds") -> Dict[str, Any]:
     if merged.empty:
         return {"note": "No rows after merging cache-on and cache-off results."}
 
@@ -245,9 +245,12 @@ def main() -> None:
                    help="Benchmark JSONL files (cache_on and cache_off; can include all strategies).")
     p.add_argument("--output-dir", required=True)
     p.add_argument("--prefix", default="analysis")
-    p.add_argument("--metric", default="wall_clock_gain_seconds",
-                   choices=["wall_clock_gain_seconds", "wall_clock_speedup_ratio",
-                            "ttft_gain_seconds", "ttft_speedup_ratio"])
+    p.add_argument("--metric", default="ttft_gain_seconds",
+                   choices=["ttft_gain_seconds", "ttft_speedup_ratio",
+                            "wall_clock_gain_seconds", "wall_clock_speedup_ratio"],
+                   help="Headline metric. TTFT is preferred because it isolates the "
+                        "prefill stage (the one prefix caching actually affects); "
+                        "wall-clock includes decode noise.")
     args = p.parse_args()
 
     dfs = [load_benchmark_jsonl(path) for path in args.input_paths]

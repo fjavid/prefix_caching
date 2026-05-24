@@ -28,8 +28,12 @@ export HF_DATASETS_CACHE="$PROJECT_ROOT/hf_cache/datasets"
 unset HF_HUB_OFFLINE TRANSFORMERS_OFFLINE HF_DATASETS_OFFLINE || true
 
 DATASET_NAME="${DATASET_NAME:-LLukas22/nq-simplified}"
-SPLIT="${SPLIT:-train[:200]}"
-MAX_SAMPLES="${MAX_SAMPLES:-200}"
+# Default sample budget is 1000 to give CIs that visibly tighten over the previous
+# 200-sample runs (CIs scale as 1/sqrt(N), so 5x more data ~= 2.2x tighter intervals).
+# The token-budget filter (--max-prompt-tokens) and synonym_substitution's ~45%
+# survival rate mean the saved-record count is typically lower than this raw budget.
+SPLIT="${SPLIT:-train[:1000]}"
+MAX_SAMPLES="${MAX_SAMPLES:-1000}"
 MIN_CHUNKS="${MIN_CHUNKS:-3}"
 MAX_CHUNKS="${MAX_CHUNKS:-4}"
 # Context-budget controls. Defaults are sized for TinyLlama-1.1B (2048-token window)

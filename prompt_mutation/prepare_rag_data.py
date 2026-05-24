@@ -12,8 +12,8 @@ Two safety mechanisms keep prompts under the model's context window:
 Usage (login node, after activating .venv):
     python -m prompt_mutation.prepare_rag_data \\
         --dataset-name LLukas22/nq-simplified \\
-        --split "train[:200]" \\
-        --max-samples 200 \\
+        --split "train[:1000]" \\
+        --max-samples 1000 \\
         --min-chunks 3 \\
         --max-chunks 4 \\
         --max-chunk-words 200 \\
@@ -38,8 +38,11 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--dataset-name", default="LLukas22/nq-simplified")
     p.add_argument("--dataset-config-name", default=None)
-    p.add_argument("--split", default="train[:200]")
-    p.add_argument("--max-samples", type=int, default=200)
+    p.add_argument("--split", default="train[:1000]",
+                   help="HF split spec. Defaults to a 1000-sample slice; pair with "
+                        "--max-samples of the same size. Pre-filter discards rows "
+                        "with too few chunks or with prompts above --max-prompt-tokens.")
+    p.add_argument("--max-samples", type=int, default=1000)
     p.add_argument("--shard-index", type=int, default=0)
     p.add_argument("--num-shards", type=int, default=1)
     p.add_argument("--cache-dir", default=None,
