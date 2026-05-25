@@ -3,11 +3,18 @@
 #SBATCH --job-name=benchmark
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
-#SBATCH --time=01:00:00
+#SBATCH --time=02:30:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:1
+# Time budget rationale (per mutation chain, N=1000 records):
+#   ~12000 inference calls = N * 3 categories * 2 layouts * 2 cache modes
+#   * ~50 ms TTFT per call = ~10 min pure compute
+#   + 2 engine startups (one per cache mode) * ~3 min = ~6 min
+#   + per-case prefix-cache reset overhead = ~10-15 min
+# Total ~30-45 min in the happy path; 2.5 h gives ~3-4x headroom for I/O
+# and scheduling slack. Bump if you scale N or strategies.
 
 set -euo pipefail
 

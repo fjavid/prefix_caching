@@ -3,7 +3,7 @@
 #SBATCH --job-name=apply_layouts
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
-#SBATCH --time=00:15:00
+#SBATCH --time=00:30:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G

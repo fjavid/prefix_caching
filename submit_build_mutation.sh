@@ -3,10 +3,14 @@
 #SBATCH --job-name=build_mutation
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
-#SBATCH --time=00:30:00
+#SBATCH --time=02:00:00
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
+# Time budget rationale: the dominant cost is NLI validation + severity
+# calibration, both linear in N. At MAX_SAMPLES=1000 with a 0-5% skip rate
+# (chunk_reorder / typo / formatting), the previous 30 min limit was not
+# enough. 2 h gives ~4x headroom; bump higher if you scale beyond N=2000.
 
 set -euo pipefail
 
