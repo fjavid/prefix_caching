@@ -21,7 +21,7 @@ Run it when:
 - **Keep questions short and closed.** Prefer yes/no or a pick-from-list. Never open-ended.
 - **Show your inferred answer inside the question** so the user can confirm with one word.
 - **Batch the questions**, do not interrogate one at a time.
-- Do not edit code. Do not stage, commit, or push.
+- Do not edit code. The only files this skill writes are `AGENT_CONFIG.md` and `.gitignore`.
 - On a re-run, read the existing `AGENT_CONFIG.md` and ask only about placeholder, empty, or contradicted sections. Preserve everything the user already confirmed.
 - Never write repo-specific detail into portable files. It all goes in `AGENT_CONFIG.md`.
 

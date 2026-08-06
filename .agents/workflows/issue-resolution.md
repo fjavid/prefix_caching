@@ -58,11 +58,11 @@ Escalation means: stop, do not commit, and report the state clearly. It is a nor
 
 ## Committing
 
-Commit only after `review` approves every batch, and only within what `AGENT_CONFIG.md` permits.
+Commit only after `review` approves every batch, following the git policy in `AGENT_CONFIG.md` exactly — including how to stage and whether pushing is allowed.
 
-- Use exact scoped `git add -- <files>`; never `git add .`.
+This workflow adds two rules of its own:
+
 - Reference the issue in the commit message.
-- Push only if `AGENT_CONFIG.md` allows pushing.
 - Do not close, comment on, or reassign the issue unless the user explicitly asked. Tracker writes are not part of this workflow.
 
 ## Autonomy boundaries
