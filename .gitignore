@@ -11,3 +11,6 @@ __pycache__/
 hf_cache/
 wheelhouse/
 frozen-requirements.txt
+
+# agent scratch space
+tmp/
