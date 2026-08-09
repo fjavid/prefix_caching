@@ -19,10 +19,34 @@ prompts as late as possible, so vLLM's prefix cache can reuse more KV blocks.
 
 ## Strategies
 
-- `original` — leaves the prompt as the mutation step produced it. Baseline.
-- `stable_first` — mutation-aware. Identifies the volatile section for the
-  current mutation type (e.g. `retrieved_chunks` for `chunk_reorder`,
+There is currently **one** real layout strategy. `get_layout_strategy` accepts
+three names, but only `stable_first` reorganizes anything:
+
+- `original` — leaves the prompt as the mutation step produced it. Baseline,
+  not a strategy.
+- `stable_first` — the only real strategy. Identifies the volatile section for
+  the current mutation type (e.g. `retrieved_chunks` for `chunk_reorder`,
   `user_query` for `typo`) and moves it to the end of the prompt; all other
   sections stay in their canonical order at the front. Does NOT alter the
   content of any section.
-- `volatile_last` — kept as a backward-compat alias of `stable_first`.
+- `volatile_last` — a backward-compat **alias** of `stable_first`, kept for old
+  configs. It returns the identical prompt text and differs only in the
+  `strategy_name` field. Running both is not a two-strategy comparison.
+
+### Limitations of `stable_first`
+
+- **It is an oracle.** The volatile section is looked up from the ground-truth
+  `mutation_type` (`RAG_VOLATILE_SECTION` / `SCIENTIFIC_VOLATILE_SECTION`). A
+  deployed serving system does not know in advance which section a future
+  request will change, so measured gains are an upper bound on what a practical
+  layout policy could achieve.
+- **It only reorders whole sections; it never edits content.** So it cannot
+  help when the mutation permutes *within* the volatile section. This is why
+  `chunk_reorder` is not recoverable here: the retrieved chunks are the bulk of
+  the prompt, and moving that block does not lengthen the shared prefix. A
+  content-normalizing strategy (canonical chunk order, whitespace/format
+  normalization) would be needed instead.
+- **Recovery scales with stable mass.** When the volatile section is small
+  (typo, synonym substitution) the strategy recovers essentially the full
+  exact-reuse ceiling; when the volatile section is the payload it recovers
+  nothing. See `research.md` for the measured asymmetry.
