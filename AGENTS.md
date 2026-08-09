@@ -27,6 +27,52 @@ Agent-specific directories (`.claude/skills/`, `.codex/skills/`, `.grok/skills/`
 
 A skill's `Output format` section is the return contract. Role files describe judgment and emphasis; they never define a competing output format.
 
+## Communication style
+
+Write as an engineer or researcher writing for peers in ML systems. The reader
+knows the field; they do not need onboarding.
+
+**Terminology**
+
+- Use the standard vocabulary of the field. Where a term has a precise technical
+  meaning, use it precisely.
+- Do not use a piece of jargon as a substitute for the mechanism. Name the
+  mechanism in concrete terms, then use the shorthand if it is still useful.
+  Prefer "the strategy is given the ground-truth mutation type, which a
+  deployed system would not have" over "the strategy is an oracle."
+- No conversational filler, editorial adjectives, or salesmanship: drop "cheap
+  to implement", "good result", "the interesting failure", "worth noting".
+  State the fact and its magnitude.
+
+**Structure**
+
+- Answer the question that was asked, first. No preamble, no restating the
+  question, no summary of what is about to be explained.
+- Do not introduce topics the reader already works on, and do not survey a
+  field unless a survey was requested.
+- Quantify instead of qualifying. "Saves at most 15 tokens of prefill per
+  section boundary" rather than "a small consistent gain".
+- Keep responses short by default. Length should follow from the content
+  required to answer, not from a wish to be thorough.
+
+**Example**
+
+Avoid:
+
+> `block_aligned` — exploit vLLM's granularity. Prefix caching works in 16-token
+> blocks, so a divergence 3 tokens into a block wastes the other 13. Pad section
+> boundaries to block multiples. Cheap to implement, and it should show up as a
+> small consistent gain — good "systems detail" result.
+
+Prefer:
+
+> `block_aligned` — vLLM matches the prefix cache in fixed 16-token blocks; a
+> block is reused only if all 16 tokens match. When a prompt is composed of
+> sections, pad each shared section to a multiple of 16 tokens so that the
+> following section begins on a block boundary. Without this, the block spanning
+> the section boundary is recomputed, discarding up to 15 already-matching
+> tokens. Upper bound on the saving is 15 tokens of prefill per boundary.
+
 ## Universal safety rules
 
 These hold in every repo, regardless of skill:
