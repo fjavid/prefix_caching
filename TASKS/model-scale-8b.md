@@ -28,7 +28,7 @@ stage and benchmark `Llama-3.1-8B-Instruct` on the cluster.
 
 ### Batch 1: Model registry and artifact namespacing
 
-Status: in_progress (implemented, awaiting review)
+Status: done
 
 Scope:
 - `pipeline_config.sh`: add `MODEL_TAG` (default `TinyLlama-1.1B-Chat-v1.0`) and
@@ -68,7 +68,7 @@ Review notes:
 
 ### Batch 2: Model-parameterized staging in prep_login.sh
 
-Status: pending
+Status: in_progress (implemented, awaiting review)
 
 Scope:
 - Replace the hardcoded TinyLlama download (`prep_login.sh:39-43`) with staging
@@ -282,6 +282,38 @@ Validation: numbers in the documents match the produced summary JSONs.
 Review notes:
 
 ## Review history
+
+- **Batch 1** — reviewed by Codex, approved, no blocking or non-blocking issues.
+  Report: `TASKS/handoffs/2026-08-19-codex-review-model-scale-batch1.md`.
+  Claims independently re-verified by Claude (export propagation to all four
+  sbatch stages, namespaced consumers, `paths.py` unused, `prep_login.sh:13`
+  legacy dirs unread). Committed.
+- **Prerequisite fixes** (chat template, reference answers, `max_model_len`) —
+  reviewed by Codex, NOT approved, two blockers raised. Report:
+  `TASKS/handoffs/2026-08-19-codex-review-prereq-fixes.md`. Both confirmed and
+  fixed:
+  - per-request reference answers in `case_builder.py`, so an
+    `unrelated_control` followup no longer carries the wrong record's answer and
+    a meaning-changing followup carries none;
+  - engine-visible model-token overlap (`BackendBase.token_overlap`) recorded
+    per case and used for plot axes, replacing whitespace-word counts that were
+    mislabelled as tokens.
+  The post-review changes were committed without a second Codex pass. Worth a
+  follow-up review pass; not a blocker for Batch 2, which touches different
+  files.
+- **Batch 2** — reviewed by Codex, NOT approved, one blocking issue. Report:
+  `TASKS/handoffs/2026-08-19-codex-review-model-scale-batch2.md`. Confirmed and
+  fixed: `model_dir_complete` accepted a partially downloaded *sharded* model,
+  because it returned success on finding any one weight file. Llama-3.1-8B is
+  sharded, so an interrupted download of the model this batch exists to stage
+  would have been treated as complete and failed later on an offline compute
+  node. It also accepted `tokenizer_config.json` standing in for a missing
+  tokenizer vocabulary. The predicate now verifies every shard named in
+  `*.index.json`, rejects `*-of-*` files with no index, and requires the
+  tokenizer to load with `local_files_only=True`.
+  Codex judged the repeated venv/install/pre-cache on a second staging run to
+  be an operational optimization rather than a Batch 2 defect; recorded as an
+  open item rather than fixed here.
 
 ## Final acceptance criteria
 
