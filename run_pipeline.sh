@@ -68,6 +68,8 @@ echo "  SCRATCH_ROOT      = $SCRATCH_ROOT"
 echo "  MODEL_TAG         = $MODEL_TAG"
 echo "  MODEL_PATH        = $MODEL_PATH"
 echo "  artifact root     = $MODEL_SCRATCH_ROOT"
+echo "  MAX_MODEL_LEN     = $MAX_MODEL_LEN"
+echo "  benchmark sbatch  = --mem=$SBATCH_MEM --time=$SBATCH_TIME --gres=$SBATCH_GRES"
 echo "  WORKLOAD          = $WORKLOAD"
 echo "  SEMANTIC_CLASS    = $SEMANTIC_CLASS"
 echo "  GENERATION_CLASS  = $GENERATION_CLASS"
@@ -101,17 +103,35 @@ build_export_arg() {
 
 submit_with_dep() {
   # Submits an sbatch script with optional dependency, prints jobid only.
-  # Usage: submit_with_dep <dep_arg_or_empty> <export_arg> <script_path>
+  # Usage: submit_with_dep <dep_arg_or_empty> <export_arg> <script_path> [extra sbatch args...]
+  #
+  # The trailing extra args are sbatch COMMAND-LINE options, used to carry
+  # per-model resource requests from the registry. #SBATCH directives inside a
+  # submit script are static comments that cannot read MODEL_TAG, and
+  # command-line options take precedence over them, so this is the only way to
+  # scale resources with the selected model.
   local dep="$1"; shift
   local export_arg="$1"; shift
   local script="$1"; shift
+  local extra=("$@")
   local jid
+  # `"${extra[@]}"` on an EMPTY array is an unbound-variable error under `set -u`
+  # in bash < 4.4 (macOS ships 3.2). Three of the four stages pass no extra args,
+  # so the ${a[@]+...} guard is required, not cosmetic.
   if [[ -n "$dep" ]]; then
-    jid=$(sbatch --parsable "$dep" --export="$export_arg" "$script" | cut -d';' -f1)
+    jid=$(sbatch --parsable "$dep" ${extra[@]+"${extra[@]}"} \
+            --export="$export_arg" "$script" | cut -d';' -f1)
   else
-    jid=$(sbatch --parsable --export="$export_arg" "$script" | cut -d';' -f1)
+    jid=$(sbatch --parsable ${extra[@]+"${extra[@]}"} \
+            --export="$export_arg" "$script" | cut -d';' -f1)
   fi
   echo "$jid"
+}
+
+# Resource overrides for the GPU benchmark stage only. The other three stages
+# are CPU-only and their static directives are model-independent.
+benchmark_sbatch_args() {
+  printf '%s\n' "--mem=$SBATCH_MEM" "--time=$SBATCH_TIME" "--gres=$SBATCH_GRES"
 }
 
 submit_chain() {
@@ -138,8 +158,11 @@ submit_chain() {
 
   if [[ "$SKIP_BENCHMARK" -eq 0 ]]; then
     local jid
-    jid=$(submit_with_dep "$dep" "$export_arg" "$SCRIPT_DIR/submit_interface_benchmark.sh")
-    echo "  benchmark:        $jid"
+    local bench_args=()
+    while IFS= read -r arg; do bench_args+=("$arg"); done < <(benchmark_sbatch_args)
+    jid=$(submit_with_dep "$dep" "$export_arg" \
+            "$SCRIPT_DIR/submit_interface_benchmark.sh" "${bench_args[@]}")
+    echo "  benchmark:        $jid  (${bench_args[*]})"
     dep="--dependency=afterok:$jid"
   fi
 

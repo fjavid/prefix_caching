@@ -8,6 +8,16 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:1
+#
+# The --time, --mem, and --gres directives above are the TinyLlama-1.1B
+# fallback, used only when this script is submitted directly with bare
+# `sbatch submit_interface_benchmark.sh`. #SBATCH directives are static comments
+# and cannot read the MODEL_TAG registry, so run_pipeline.sh passes the
+# per-model values from pipeline_config.sh (SBATCH_MEM / SBATCH_TIME /
+# SBATCH_GRES) as sbatch command-line options, which take precedence.
+#
+# Submitting this script directly for an 8B model will therefore under-request
+# memory and time. Go through run_pipeline.sh, or pass the overrides yourself.
 # Time budget rationale (per mutation chain, N=1000 records):
 #   ~12000 inference calls = N * 3 categories * 2 layouts * 2 cache modes
 #   * ~50 ms TTFT per call = ~10 min pure compute
@@ -72,11 +82,16 @@ for strategy in $RUN_STRATEGIES; do
 done
 
 echo "Benchmark grid:"
+echo "  model_tag                   = $MODEL_TAG"
 echo "  strategies                  = $RUN_STRATEGIES"
 echo "  cache_modes                 = $RUN_CACHE_MODES"
 echo "  model                       = $MODEL_PATH"
+echo "  max_model_len               = $MAX_MODEL_LEN"
 echo "  use_async_ttft              = $USE_ASYNC_TTFT"
 echo "  reset_cache_between_cases   = $RESET_CACHE_BETWEEN_CASES"
+# Resource request actually granted, which may differ from the static #SBATCH
+# directives above when run_pipeline.sh supplied command-line overrides.
+echo "  granted mem / time / gres   = ${SLURM_MEM_PER_NODE:-?} / ${SLURM_JOB_ID:+see scontrol} / ${SLURM_JOB_GPUS:-?}"
 
 # ONE engine per cache_mode (vLLM's enable_prefix_caching is set at engine
 # construction time and can't be toggled at runtime, so we need a separate
@@ -96,6 +111,7 @@ for cache_mode in $RUN_CACHE_MODES; do
   python -m inference_benchmark.benchmark_prefix_cache \
     --backend-name vllm \
     --model-name "$MODEL_PATH" \
+    --max-model-len "$MAX_MODEL_LEN" \
     $cache_flag \
     $async_flag \
     $reset_flag \

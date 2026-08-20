@@ -134,7 +134,7 @@ Review notes:
 
 ### Batch 4: Engine context cap and per-model SLURM resources
 
-Status: pending
+Status: done
 
 Scope:
 - `submit_interface_benchmark.sh` passes `--max-model-len "$MAX_MODEL_LEN"` to
@@ -332,6 +332,32 @@ Review notes:
   requirement, not a Batch 3 repair; and
   `prompt_mutation/prepare_rag_data.py:71` keeps a second `1800` default that
   applies only to direct invocation.
+- **Batch 4** — reviewed by Codex, approved, R5 and R6 met, no blocking issues.
+  Report: `TASKS/handoffs/2026-08-19-codex-review-model-scale-batch4.md`.
+  A bug introduced during implementation was found and fixed before review:
+  `"${extra[@]}"` on an empty array is an unbound-variable error under `set -u`
+  in bash < 4.4 (macOS ships 3.2), and three of the four stages pass no extra
+  args, so 3 of 4 submissions failed and the benchmark stage received
+  `--dependency=afterok:` with an empty job id. Replaced with
+  `${extra[@]+"${extra[@]}"}`.
+  Codex verified the guard under bash 3.2 including arguments containing spaces
+  and empty strings, ran all 16 SKIP_* combinations against both tags (32 runs,
+  all correctly chained, no empty dependency), confirmed resource overrides
+  appear only on the benchmark stage, and confirmed `--max-model-len` reaches
+  both vLLM construction paths with omission preserving prior behavior. It found
+  no sibling array-expansion defect: `layout_jsonls` is unguarded but
+  unreachable-empty because `pipeline_config.sh:115` uses `:=`, so an empty
+  `STRATEGIES` is replaced by the default. Independently re-verified.
+  Codex endorsed the deviation from the plan on the 8B time limit: provisional
+  `06:00:00` over the planned `02:30:00`, on the grounds that a longer limit does
+  not force longer runtime whereas the shorter one risks killing the sweep after
+  consuming the allocation. Batch 8 must still replace it with a measured value.
+
+  **Open operational risk:** `SBATCH_GRES=gpu:1` does not guarantee a device with
+  the >= 40 GB that R6 requires. On a heterogeneous GPU pool the 8B job can be
+  allocated an undersized device and fail at engine startup. Set a typed request
+  (e.g. `SBATCH_GRES=gpu:a100:1`) for the cluster in use. Record this in
+  `RUNBOOK.md` during Batch 6.
 
 ## Final acceptance criteria
 

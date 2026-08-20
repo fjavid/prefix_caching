@@ -30,6 +30,15 @@
 #   MAX_PROMPT_TOKENS - prompt-token budget enforced by prepare_data.sh
 #   N_PARAMS          - parameter count for analysis/plot_report.py roofline
 #   GATED             - 1 if the HF repo requires license acceptance + HF_TOKEN
+#   SBATCH_MEM        - host memory for the GPU benchmark job
+#   SBATCH_TIME       - wall-clock limit for the GPU benchmark job
+#   SBATCH_GRES       - GPU request for the benchmark job
+#
+# The SBATCH_* values are passed as sbatch COMMAND-LINE overrides by
+# run_pipeline.sh, because #SBATCH directives inside a submit script are static
+# comments and cannot read this registry. Command-line options win over
+# directives, so the directives in submit_interface_benchmark.sh remain the
+# fallback for a bare `sbatch submit_interface_benchmark.sh`.
 
 : "${SLURM_ACCOUNT:=def-mmehride}"
 
@@ -61,6 +70,10 @@ case "$MODEL_TAG" in
     : "${MAX_PROMPT_TOKENS:=1800}"
     : "${N_PARAMS:=1.1e9}"
     : "${GATED:=0}"
+    # 2.2 GB of weights; the stock SBATCH directives are already sized for this.
+    : "${SBATCH_MEM:=32G}"
+    : "${SBATCH_TIME:=02:30:00}"
+    : "${SBATCH_GRES:=gpu:1}"
     ;;
   Llama-3.1-8B-Instruct)
     : "${MODEL_REPO:=meta-llama/Llama-3.1-8B-Instruct}"
@@ -68,6 +81,19 @@ case "$MODEL_TAG" in
     : "${MAX_PROMPT_TOKENS:=1800}"
     : "${N_PARAMS:=8.0e9}"
     : "${GATED:=1}"
+    # ~16 GB of weights in bf16, so host memory for loading roughly doubles and
+    # the device needs >= 40 GB to hold weights plus KV cache at
+    # gpu_memory_utilization=0.85.
+    : "${SBATCH_MEM:=64G}"
+    # PROVISIONAL. Estimated from the v5 TinyLlama timings scaled ~7x: the worst
+    # mutation type needs ~4.4 h at 3000 cases, which the 02:30:00 default would
+    # kill mid-run. Replace with the measured value from the pilot (Batch 8 of
+    # TASKS/model-scale-8b.md) before the full sweep.
+    : "${SBATCH_TIME:=06:00:00}"
+    # A plain gpu:1 request may land on a device smaller than 40 GB depending on
+    # the cluster and partition. Override with an explicit type when needed,
+    # e.g. SBATCH_GRES=gpu:a100:1.
+    : "${SBATCH_GRES:=gpu:1}"
     ;;
   *)
     echo "ERROR: unknown MODEL_TAG='$MODEL_TAG'." >&2
