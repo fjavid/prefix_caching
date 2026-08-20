@@ -65,7 +65,9 @@ MUTATION_LIST="${MUTATION_TYPES:-$MUTATION_TYPE}"
 echo "Pipeline configuration:"
 echo "  PROJECT_ROOT      = $PROJECT_ROOT"
 echo "  SCRATCH_ROOT      = $SCRATCH_ROOT"
+echo "  MODEL_TAG         = $MODEL_TAG"
 echo "  MODEL_PATH        = $MODEL_PATH"
+echo "  artifact root     = $MODEL_SCRATCH_ROOT"
 echo "  WORKLOAD          = $WORKLOAD"
 echo "  SEMANTIC_CLASS    = $SEMANTIC_CLASS"
 echo "  GENERATION_CLASS  = $GENERATION_CLASS"
@@ -79,7 +81,10 @@ echo ""
 # Build a --export=ALL,KEY=VAL,... string that pins all our pipeline knobs into the child job env.
 # Captures the CURRENT shell value of MUTATION_TYPE, so call this AFTER setting MUTATION_TYPE per iteration.
 build_export_arg() {
-  local vars=(PIPELINE_DIR PROJECT_ROOT SCRATCH_ROOT MODEL_PATH
+  # MODEL_TAG must be pinned: child jobs re-source pipeline_config.sh, and
+  # without it they would fall back to the default tag and write their
+  # artifacts into the wrong model's namespace.
+  local vars=(PIPELINE_DIR PROJECT_ROOT SCRATCH_ROOT MODEL_TAG MODEL_PATH
               WORKLOAD SEMANTIC_CLASS GENERATION_CLASS MUTATION_TYPE
               STRATEGIES CACHE_MODES USE_ASYNC_TTFT VLLM_LOGGING_LEVEL
               RESET_CACHE_BETWEEN_CASES)
@@ -163,8 +168,8 @@ echo "Per-mutation outputs land in:"
 for mut in $MUTATION_LIST; do
   tag="${WORKLOAD}_${mut}"
   echo "  [$mut]"
-  echo "    mutations  : $SCRATCH_ROOT/mutation/$WORKLOAD/$SEMANTIC_CLASS/$GENERATION_CLASS/$mut/"
-  echo "    layouts    : $SCRATCH_ROOT/prompt_organization/${tag}_<strategy>.jsonl"
-  echo "    benchmarks : $SCRATCH_ROOT/benchmark_results/${tag}_<strategy>_cache_<mode>.jsonl"
-  echo "    analysis   : $SCRATCH_ROOT/analysis/${tag}.{flat,merged}.csv  and  plots_${tag}/"
+  echo "    mutations  : $MUTATION_ROOT/$WORKLOAD/$SEMANTIC_CLASS/$GENERATION_CLASS/$mut/"
+  echo "    layouts    : $LAYOUT_DIR/${tag}_<strategy>.jsonl"
+  echo "    benchmarks : $BENCH_DIR/${tag}_<strategy>_cache_<mode>.jsonl"
+  echo "    analysis   : $ANALYSIS_DIR/${tag}.{flat,merged}.csv  and  plots_${tag}/"
 done

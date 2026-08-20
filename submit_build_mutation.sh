@@ -28,9 +28,10 @@ mkdir -p "$PROCESSED_DIR" "$MUTATION_DIR"
 cd "$PROJECT_ROOT"
 
 echo "Building mutation dataset:"
+echo "  model_tag=$MODEL_TAG"
 echo "  workload=$WORKLOAD semantic_class=$SEMANTIC_CLASS"
 echo "  generation_class=$GENERATION_CLASS mutation_type=$MUTATION_TYPE"
-echo "  output_root=$SCRATCH_ROOT/mutation"
+echo "  output_root=$MUTATION_ROOT"
 
 python -m prompt_mutation.build_mutation_dataset \
   --workload "$WORKLOAD" \
@@ -40,4 +41,4 @@ python -m prompt_mutation.build_mutation_dataset \
   --mutation-type "$MUTATION_TYPE" \
   --validation-backend sentence_transformer \
   --severity-backend sentence_transformer \
-  --output-root "$SCRATCH_ROOT/mutation"
+  --output-root "$MUTATION_ROOT"

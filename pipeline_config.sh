@@ -7,7 +7,12 @@
 #   PROJECT_ROOT    - repo root on the cluster (must contain .venv/, models/, etc.)
 #   SCRATCH_ROOT    - cluster artifact root (mutation, layouts, benchmarks, analysis)
 #   Local mirror    - repo outputs/ (see paths.py); sync from $SCRATCH after cluster runs
-#   MODEL_PATH      - local model directory used by vLLM (no internet on compute nodes)
+#   MODEL_TAG       - selects the model from the registry below. Also namespaces
+#                     every $SCRATCH_ROOT artifact directory, so two models never
+#                     overwrite each other's results.
+#   MODEL_PATH      - local model directory used by vLLM (no internet on compute
+#                     nodes). Defaults to $PROJECT_ROOT/models/$MODEL_TAG; an
+#                     explicit export still wins.
 #   WORKLOAD        - rag | scientific
 #   SEMANTIC_CLASS  - meaning_preserving | meaning_changing
 #   GENERATION_CLASS- algorithmic | llm_generated
@@ -18,13 +23,63 @@
 # Login-node-only knobs (consumed by prepare_data.sh):
 #   MAX_CHUNK_WORDS   - per-chunk word cap during extraction (default 200)
 #   TOKENIZER_PATH    - tokenizer used for the prompt-budget filter (default $MODEL_PATH)
-#   MAX_PROMPT_TOKENS - drop prompts longer than this after rendering (default 1800)
+#
+# Model registry fields (resolved from MODEL_TAG; each is overridable):
+#   MODEL_REPO        - Hugging Face repo id, used by prep_login.sh
+#   MAX_MODEL_LEN     - engine context cap passed to vLLM
+#   MAX_PROMPT_TOKENS - prompt-token budget enforced by prepare_data.sh
+#   N_PARAMS          - parameter count for analysis/plot_report.py roofline
+#   GATED             - 1 if the HF repo requires license acceptance + HF_TOKEN
 
 : "${SLURM_ACCOUNT:=def-mmehride}"
 
 : "${PROJECT_ROOT:=$HOME/work/prefix_caching}"
 : "${SCRATCH_ROOT:=$SCRATCH/prefix_caching}"
-: "${MODEL_PATH:=$PROJECT_ROOT/models/TinyLlama-1.1B-Chat-v1.0}"
+
+# ---------------------------------------------------------------------------
+# Model registry.
+#
+# MODEL_TAG is the single knob that selects a model. It resolves to the local
+# weights directory, the tokenizer used for the prompt-token budget, the engine
+# context cap, and the $SCRATCH_ROOT artifact namespace.
+#
+# MAX_MODEL_LEN is deliberately NOT the model's declared context window. The
+# required window is MAX_PROMPT_TOKENS + max_new_tokens (1800 + 64 = 1864), and
+# the largest prompt observed in practice was 1615 tokens. Llama-3.1 declares
+# 131072; without the cap vLLM sizes the KV cache for the full window and fails
+# allocation on a 40 GB device.
+#
+# To add a model: add a case arm and stage the weights with
+#   MODEL_TAG=<tag> bash prep_login.sh
+# ---------------------------------------------------------------------------
+: "${MODEL_TAG:=TinyLlama-1.1B-Chat-v1.0}"
+
+case "$MODEL_TAG" in
+  TinyLlama-1.1B-Chat-v1.0)
+    : "${MODEL_REPO:=TinyLlama/TinyLlama-1.1B-Chat-v1.0}"
+    : "${MAX_MODEL_LEN:=2048}"
+    : "${MAX_PROMPT_TOKENS:=1800}"
+    : "${N_PARAMS:=1.1e9}"
+    : "${GATED:=0}"
+    ;;
+  Llama-3.1-8B-Instruct)
+    : "${MODEL_REPO:=meta-llama/Llama-3.1-8B-Instruct}"
+    : "${MAX_MODEL_LEN:=2048}"
+    : "${MAX_PROMPT_TOKENS:=1800}"
+    : "${N_PARAMS:=8.0e9}"
+    : "${GATED:=1}"
+    ;;
+  *)
+    echo "ERROR: unknown MODEL_TAG='$MODEL_TAG'." >&2
+    echo "Valid tags:" >&2
+    echo "  TinyLlama-1.1B-Chat-v1.0" >&2
+    echo "  Llama-3.1-8B-Instruct" >&2
+    echo "Add a case arm in pipeline_config.sh to register a new model." >&2
+    exit 1
+    ;;
+esac
+
+: "${MODEL_PATH:=$PROJECT_ROOT/models/$MODEL_TAG}"
 
 : "${WORKLOAD:=rag}"
 : "${SEMANTIC_CLASS:=meaning_preserving}"
@@ -34,12 +89,20 @@
 : "${STRATEGIES:=original stable_first}"
 : "${CACHE_MODES:=off on}"
 
-# Derived paths
-MUTATION_DIR="$SCRATCH_ROOT/mutation/$WORKLOAD/$SEMANTIC_CLASS/$GENERATION_CLASS/$MUTATION_TYPE"
-LAYOUT_DIR="$SCRATCH_ROOT/prompt_organization"
-BENCH_DIR="$SCRATCH_ROOT/benchmark_results"
-ANALYSIS_DIR="$SCRATCH_ROOT/analysis"
-PROCESSED_DIR="$SCRATCH_ROOT/processed"
+# Derived paths.
+#
+# Every artifact directory is namespaced by MODEL_TAG. Without this, artifact
+# names carry only TAG=${WORKLOAD}_${MUTATION_TYPE}, so running a second model
+# would silently overwrite the first model's benchmark JSONLs. Each model also
+# gets its own processed/ example set, because each filters the prompt-token
+# budget with its own tokenizer.
+MODEL_SCRATCH_ROOT="$SCRATCH_ROOT/$MODEL_TAG"
+MUTATION_ROOT="$MODEL_SCRATCH_ROOT/mutation"
+MUTATION_DIR="$MUTATION_ROOT/$WORKLOAD/$SEMANTIC_CLASS/$GENERATION_CLASS/$MUTATION_TYPE"
+LAYOUT_DIR="$MODEL_SCRATCH_ROOT/prompt_organization"
+BENCH_DIR="$MODEL_SCRATCH_ROOT/benchmark_results"
+ANALYSIS_DIR="$MODEL_SCRATCH_ROOT/analysis"
+PROCESSED_DIR="$MODEL_SCRATCH_ROOT/processed"
 
 # Common naming tag, e.g. rag_chunk_reorder
 TAG="${WORKLOAD}_${MUTATION_TYPE}"

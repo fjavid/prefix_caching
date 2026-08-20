@@ -25,12 +25,19 @@ cd "$SCRIPT_DIR"
 
 # Allow running off-cluster by stubbing SLURM-only env vars.
 : "${SCRATCH:=$SCRIPT_DIR/outputs}"
+# pipeline_config.sh assigns ANALYSIS_DIR unconditionally, so capture any
+# caller-supplied override before sourcing or it is silently discarded.
+ANALYSIS_DIR_OVERRIDE="${ANALYSIS_DIR:-}"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/pipeline_config.sh"
 
 # Override directories for local runs that don't have $SCRATCH/prefix_caching.
-RESULTS_ROOT="${RESULTS_ROOT:-$SCRATCH_ROOT/benchmark_results}"
-ANALYSIS_DIR="${ANALYSIS_DIR:-$SCRATCH_ROOT/analysis}"
+# Defaults are the MODEL_TAG-namespaced directories derived in
+# pipeline_config.sh, so a local analysis run reads the same tree the cluster
+# benchmark stage wrote. Both stay overridable for a MacBook run against an
+# rsync'd copy.
+RESULTS_ROOT="${RESULTS_ROOT:-$BENCH_DIR}"
+ANALYSIS_DIR="${ANALYSIS_DIR_OVERRIDE:-$ANALYSIS_DIR}"
 METRIC="${METRIC:-ttft_gain_seconds}"
 
 if [[ ! -d "$RESULTS_ROOT" ]]; then
