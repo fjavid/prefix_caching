@@ -201,10 +201,16 @@ def _faceted_grouped_bar(merged: pd.DataFrame, facet: str, x: str, hue: str, y: 
 def _gain_vs_shared_prefix(
     merged: pd.DataFrame, metric: str, out_path: Path,
 ) -> None:
-    """Plot the headline scaling curve: metric vs token_shared_prefix_ratio
-    on partial_reuse rows, with one marker per (mutation_type, layout_strategy)
+    """Plot the headline scaling curve: metric vs shared-prefix ratio on
+    partial_reuse rows, with one marker per (mutation_type, layout_strategy)
     combination so the asymptotic plateau near shared-prefix ratio ~1.0 is
     visible.
+
+    Uses `shared_prefix_model_token_ratio` — the engine-visible MODEL-token
+    ratio measured after chat templating — when the benchmark stage recorded
+    it. Older result sets only carry `token_shared_prefix_ratio`, which counts
+    whitespace words on the raw prompt and undercounts model tokens by a
+    record-dependent factor; the axis label states which one is in use.
 
     Also overlays horizontal reference lines for the exact_reuse ceiling and
     the unrelated_control noise floor (both averaged across mutations and
@@ -213,8 +219,22 @@ def _gain_vs_shared_prefix(
     prefix length and saturates near the ceiling once the prefix is ~all
     of the prompt.
     """
+    if "shared_prefix_model_token_ratio" in merged.columns and \
+            merged["shared_prefix_model_token_ratio"].notna().any():
+        ratio_col = "shared_prefix_model_token_ratio"
+        ratio_label = (
+            "Shared prefix ratio (model tokens, as sent to the engine)\n"
+            "fraction of the prompt reused from cache"
+        )
+    else:
+        ratio_col = "token_shared_prefix_ratio"
+        ratio_label = (
+            "Shared prefix ratio (whitespace words, raw prompt)\n"
+            "fraction of base prompt shared with mutated"
+        )
+
     pr = merged[merged["relation"] == "partial_reuse"].dropna(
-        subset=["token_shared_prefix_ratio", metric]
+        subset=[ratio_col, metric]
     )
     if pr.empty:
         return
@@ -230,7 +250,7 @@ def _gain_vs_shared_prefix(
             if sub.empty:
                 continue
             ax.scatter(
-                sub["token_shared_prefix_ratio"], sub[metric],
+                sub[ratio_col], sub[metric],
                 marker=markers[mi % len(markers)],
                 color=cmap(li % 10),
                 alpha=0.45, s=24,
@@ -248,7 +268,7 @@ def _gain_vs_shared_prefix(
                    label=f"unrelated_control floor ({ctrl.mean()*1000:.2f} ms)")
     ax.axhline(0, color="black", lw=0.6)
     ax.set_xlim(-0.02, 1.02)
-    ax.set_xlabel("token_shared_prefix_ratio (fraction of base prompt shared with mutated)")
+    ax.set_xlabel(ratio_label)
     ax.set_ylabel(f"{metric}  (seconds)")
     ax.set_title(f"{metric} vs shared-prefix ratio (partial_reuse)\n"
                  "Layout interventions move points to the right; gain saturates near 1.0")
@@ -396,13 +416,25 @@ def make_all_plots(merged: pd.DataFrame, out_dir: Path, metric: str) -> None:
         y_label=metric,
     )
 
-    if "first_divergence_token" in merged.columns:
+    # Prefer the engine-visible MODEL-token divergence recorded by the benchmark
+    # stage; that is what the prefix cache matches on. Fall back to the overlap
+    # analyzer's whitespace-word count for runs produced before it existed, and
+    # label the axis honestly in that case.
+    if "first_divergence_model_token" in merged.columns and \
+            pr["first_divergence_model_token"].notna().any():
+        div_col = "first_divergence_model_token"
+        div_label = "First divergence (model tokens, as sent to the engine)"
+    else:
+        div_col = "first_divergence_token"
+        div_label = "First divergence (whitespace words, raw prompt)"
+
+    if div_col in merged.columns:
         _scatter(
-            pr.dropna(subset=["first_divergence_token", metric]),
-            x="first_divergence_token", y=metric, hue="layout_strategy",
+            pr.dropna(subset=[div_col, metric]),
+            x=div_col, y=metric, hue="layout_strategy",
             out_path=out_dir / f"{metric}_vs_first_divergence_partial_reuse.png",
-            title=f"{metric} vs first divergence token (partial_reuse)",
-            x_label="First divergence token", y_label=metric,
+            title=f"{metric} vs first divergence (partial_reuse)",
+            x_label=div_label, y_label=metric,
         )
 
     if {"wall_clock_off", "wall_clock_on"}.issubset(merged.columns):

@@ -100,6 +100,45 @@ def _extract_chunks_from_row(row: Dict[str, Any], max_chunk_words: int = 0) -> L
     return chunks
 
 
+def _extract_answers_from_row(row: Dict[str, Any]) -> List[str]:
+    """Pull the ground-truth answer(s) out of a raw QA row.
+
+    Different QA datasets name this field differently, so probe the common
+    keys in priority order and accept either a string or a list of strings.
+    The result is reference-only: it is stored on RAGExample.reference_answers
+    and must never reach the rendered prompt.
+    """
+    for key in ["answers", "answer", "short_answers", "target", "output"]:
+        if key not in row or not row[key]:
+            continue
+        value = row[key]
+        if isinstance(value, str):
+            text = value.strip()
+            return [text] if text else []
+        if isinstance(value, list):
+            out: List[str] = []
+            for item in value:
+                if isinstance(item, str) and item.strip():
+                    out.append(item.strip())
+                elif isinstance(item, dict):
+                    # e.g. {"text": "...", "answer_start": ...}
+                    txt = item.get("text") or item.get("answer")
+                    if txt and str(txt).strip():
+                        out.append(str(txt).strip())
+            if out:
+                return out
+        if isinstance(value, dict):
+            # e.g. SQuAD-style {"text": [...]}
+            inner = value.get("text") or value.get("answer")
+            if isinstance(inner, str) and inner.strip():
+                return [inner.strip()]
+            if isinstance(inner, list):
+                out = [str(x).strip() for x in inner if str(x).strip()]
+                if out:
+                    return out
+    return []
+
+
 def _convert_row_to_rag_example(row: Dict[str, Any], max_chunks: int,
                                 max_chunk_words: int = 0) -> Optional[RAGExample]:
     question = None
@@ -119,6 +158,7 @@ def _convert_row_to_rag_example(row: Dict[str, Any], max_chunks: int,
         user_query=question,
         retrieved_chunks=chunks,
         output_instruction="Answer briefly and ground the answer in the retrieved documents.",
+        reference_answers=_extract_answers_from_row(row),
     )
 
 
@@ -219,6 +259,7 @@ def _pad_rag_examples_with_distractors(
                 user_query=ex.user_query,
                 retrieved_chunks=chunks,
                 output_instruction=ex.output_instruction,
+                reference_answers=list(ex.reference_answers),
             )
         )
     return padded

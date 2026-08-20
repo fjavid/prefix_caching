@@ -57,6 +57,8 @@ class VLLMBackend(BackendBase):
                 'gpu_memory_utilization': self.gpu_memory_utilization,
                 'trust_remote_code': self.trust_remote_code,
             }
+            if self.max_model_len is not None:
+                kwargs['max_model_len'] = self.max_model_len
             # quiet per-request logging
             if 'disable_log_requests' in field_names:
                 kwargs['disable_log_requests'] = True   # vLLM < 0.10
@@ -67,12 +69,16 @@ class VLLMBackend(BackendBase):
             self._loop = asyncio.new_event_loop()
         else:
             from vllm import LLM
-            self.llm = LLM(
-                model=self.model_name,
-                enable_prefix_caching=self.enable_prefix_caching,
-                gpu_memory_utilization=self.gpu_memory_utilization,
-                trust_remote_code=self.trust_remote_code,
-            )
+            llm_kwargs: Dict[str, Any] = {
+                'model': self.model_name,
+                'enable_prefix_caching': self.enable_prefix_caching,
+                'gpu_memory_utilization': self.gpu_memory_utilization,
+                'trust_remote_code': self.trust_remote_code,
+            }
+            if self.max_model_len is not None:
+                llm_kwargs['max_model_len'] = self.max_model_len
+            self.llm = LLM(**llm_kwargs)
+        self._load_chat_tokenizer()
         self._discover_reset_prefix_cache()
         self._started = True
 
@@ -138,6 +144,10 @@ class VLLMBackend(BackendBase):
     def generate(self, prompt: str, request_id: Optional[str] = None) -> GenerationResult:
         if not self._started or self.sampling_params is None:
             raise RuntimeError('Backend not started. Call start() first.')
+        # Wrap here, at the last point before the engine, so the assistant turn
+        # marker is always the final content of the prompt no matter what the
+        # layout strategy produced.
+        prompt = self.format_prompt(prompt)
         if self.use_async_ttft:
             return self._generate_async(prompt, request_id)
         return self._generate_offline(prompt, request_id)

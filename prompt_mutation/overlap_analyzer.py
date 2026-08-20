@@ -8,8 +8,33 @@ from difflib import SequenceMatcher
 
 @dataclass
 class OverlapMetrics:
+    """Surface-overlap metrics between a base prompt and its mutation.
+
+    IMPORTANT — what "token" means here.
+
+    Every `*_token*` field below counts WHITESPACE-SEPARATED WORDS
+    (`whitespace_tokenize`, i.e. `str.split()`), measured on the raw prompt text
+    before any chat template is applied. They are NOT model tokens, and they are
+    NOT the positions vLLM matches when reusing cached KV blocks.
+
+    The two differ substantially and by a record-dependent amount. Measured on
+    `rag_typo_stable_first` with the TinyLlama-1.1B tokenizer, the ratio
+    model_tokens / whitespace_words at the divergence point ranged 1.42 to 2.62
+    over 60 records (mean 1.74, stdev 0.26). One record diverged at word 514 but
+    at model token 932. The chat template adds a further constant offset
+    (+6 model tokens for TinyLlama), which is small next to that gap.
+
+    Consequence: these fields are valid as a measure of *surface* similarity and
+    for ranking mutations by how early they perturb the prompt. They should not
+    be described as a count of cached tokens or reusable KV blocks. Any plot
+    using them must label the axis as whitespace words.
+
+    Field names are kept as-is because they are already serialized in mutation
+    and layout JSONLs; the definition above is authoritative over the name.
+    """
     char_shared_prefix: int
     char_shared_prefix_ratio: float
+    # Whitespace-word counts. See the class docstring: not model tokens.
     token_shared_prefix: int
     token_shared_prefix_ratio: float
     first_divergence_token: int

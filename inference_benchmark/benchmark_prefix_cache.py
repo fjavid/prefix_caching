@@ -26,6 +26,9 @@ def make_backend(cfg: BackendConfig):
             gpu_memory_utilization=cfg.gpu_memory_utilization,
             trust_remote_code=cfg.trust_remote_code,
             use_async_ttft=cfg.use_async_ttft,
+            max_model_len=cfg.max_model_len,
+            apply_chat_template=cfg.apply_chat_template,
+            tokenizer_path=cfg.tokenizer_path,
         )
     if cfg.backend_name == 'sglang':
         return SGLangBackend(
@@ -36,6 +39,9 @@ def make_backend(cfg: BackendConfig):
             top_p=cfg.top_p,
             gpu_memory_utilization=cfg.gpu_memory_utilization,
             trust_remote_code=cfg.trust_remote_code,
+            max_model_len=cfg.max_model_len,
+            apply_chat_template=cfg.apply_chat_template,
+            tokenizer_path=cfg.tokenizer_path,
         )
     raise ValueError(f'Unsupported backend: {cfg.backend_name}')
 
@@ -147,6 +153,22 @@ def parse_args() -> BenchmarkConfig:
     p.add_argument('--temperature', type=float, default=0.0)
     p.add_argument('--top-p', type=float, default=1.0)
     p.add_argument('--gpu-memory-utilization', type=float, default=0.85)
+    p.add_argument('--max-model-len', type=int, default=None,
+                   help='Cap the engine context window. Required for models declaring '
+                        'a very large window (Llama-3.1 declares 131072), which would '
+                        'otherwise size the KV cache for the full window and fail '
+                        'allocation. Set to MAX_PROMPT_TOKENS + max_new_tokens rounded '
+                        'up to a multiple of 16. Omit to use the model default.')
+    p.add_argument('--apply-chat-template', action='store_true', default=True,
+                   help='Wrap each prompt as one user turn and append the assistant '
+                        'turn marker (default). Required for chat models: without it '
+                        'a prompt ending on a complete sentence reads as a finished '
+                        'document and the model emits EOS instead of answering.')
+    p.add_argument('--no-chat-template', dest='apply_chat_template', action='store_false',
+                   help='Send prompts as raw completion text. Use only to reproduce '
+                        'pre-fix runs or to benchmark a base (non-chat) model.')
+    p.add_argument('--tokenizer-path', default=None,
+                   help='Tokenizer supplying the chat template. Defaults to --model-name.')
     p.add_argument('--trust-remote-code', action='store_true')
     p.add_argument('--use-async-ttft', action='store_true', default=True,
                    help='Use AsyncLLMEngine to measure TTFT (default).')
@@ -213,6 +235,9 @@ def parse_args() -> BenchmarkConfig:
             gpu_memory_utilization=args.gpu_memory_utilization,
             trust_remote_code=args.trust_remote_code,
             use_async_ttft=args.use_async_ttft,
+            max_model_len=args.max_model_len,
+            apply_chat_template=args.apply_chat_template,
+            tokenizer_path=args.tokenizer_path,
             warmup_iters=args.warmup_iters,
             reset_cache_between_cases=args.reset_cache_between_cases,
         ),

@@ -36,13 +36,23 @@ findings across all mutations into one view:
    on two variables: ratio AND total length).
 
 5. `report_ttft_gain_vs_first_divergence.png`
-   TTFT_gain (= TTFT_off - TTFT_on) vs first_divergence_token. Because
-   the gain depends ONLY on the number of cached tokens (not on the
-   remaining prompt length), this should be the tightest 1D
-   relationship in the entire study: a straight line through the
-   origin, slope ~= per-token prefill cost (~11.6 mu_s/token from
-   plot 3). The intercept being near zero is itself an important
-   sanity check.
+   TTFT_gain (= TTFT_off - TTFT_on) vs first_divergence_token. The gain
+   is driven by how much prefill work is reused, which depends on the
+   cached prefix length and not on the remaining prompt length, so this
+   should be the tightest 1D relationship in the study: a straight line
+   through the origin. The intercept being near zero is itself an
+   important sanity check.
+
+   Caveat on the x-axis and on the slope. `first_divergence_token`
+   counts WHITESPACE WORDS on the raw prompt, not model tokens and not
+   cached KV-block positions (see
+   prompt_mutation/overlap_analyzer.OverlapMetrics). The ratio
+   model_tokens / whitespace_words at the divergence point is
+   record-dependent — measured 1.42 to 2.62 over 60 records with the
+   TinyLlama-1.1B tokenizer — so the x-axis carries per-record noise and
+   the fitted slope is a cost per WORD, not per model token. Divide by
+   the mean ratio (~1.74 for this data) before comparing against a
+   per-token roofline figure.
 
 Run from the repo root after the analysis stage has produced the merged
 CSVs for every mutation:
@@ -183,15 +193,34 @@ def plot_gain_vs_shared_prefix(df: pd.DataFrame, out_path: Path) -> None:
 
 
 def _estimate_total_tokens(df: pd.DataFrame) -> pd.Series:
-    """Total prompt tokens per row, reconstructed from existing columns.
+    """Total prompt length per row, in MODEL tokens where available.
 
-    For partial_reuse rows the overlap analyzer recorded:
-        token_shared_prefix_ratio = first_divergence_token / total_tokens
-    So total = first_divergence / ratio. Verified empirically that the
-    estimate is identical across the two layouts of the same case
-    (e.g. 516, 455, 302, 323, ... tokens reproduce to one token across
-    layouts), so the formula is exact, not approximate.
+    Preferred source: `followup_prompt_model_tokens`, the count the engine
+    itself reported. This is the quantity the per-token prefill cost should be
+    measured against, and it is what the roofline comparison assumes.
+
+    Fallback, for CSVs produced before that column existed: reconstruct from
+    the overlap analyzer's ratio,
+        token_shared_prefix_ratio = first_divergence_token / total
+    so total = first_divergence / ratio. The reconstruction is exact for its own
+    unit but that unit is WHITESPACE WORDS, not model tokens (see
+    prompt_mutation/overlap_analyzer.OverlapMetrics). Words undercount model
+    tokens by a record-dependent factor measured at 1.42-2.62 (mean 1.74,
+    TinyLlama-1.1B), so a slope fitted on the fallback is a cost per word and
+    must not be compared directly against a per-token roofline.
     """
+    if "followup_prompt_model_tokens" in df.columns:
+        model_tokens = pd.to_numeric(
+            df["followup_prompt_model_tokens"], errors="coerce"
+        )
+        if model_tokens.notna().any():
+            return model_tokens
+
+    print(
+        "  WARNING: no followup_prompt_model_tokens column; falling back to "
+        "whitespace-word reconstruction. The fitted slope is a cost per WORD, "
+        "not per model token, and is not comparable to the roofline estimate."
+    )
     fd = pd.to_numeric(df["first_divergence_token"], errors="coerce")
     tr = pd.to_numeric(df["token_shared_prefix_ratio"], errors="coerce")
     # Avoid division-by-zero noise from rows where the mutation is at position 0.

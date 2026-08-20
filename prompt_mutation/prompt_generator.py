@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Dict, List, Any, Optional, Callable, Literal
 from pathlib import Path
 import copy
@@ -37,6 +37,13 @@ class RAGExample:
     user_query: str
     retrieved_chunks: List[str]
     output_instruction: str
+    # Ground-truth answer(s) from the source QA dataset, carried through the
+    # pipeline so generated output can be scored later.
+    #
+    # NEVER include this in render(). The model must not see the answer; it is
+    # reference-only metadata. Defaulted so JSONLs written before this field
+    # existed still deserialize via RAGExample(**row).
+    reference_answers: List[str] = field(default_factory=list)
 
     def render(self) -> str:
         chunks_text = "\n\n".join(

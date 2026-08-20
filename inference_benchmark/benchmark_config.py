@@ -20,6 +20,19 @@ class BackendConfig:
     gpu_memory_utilization: float = 0.85
     trust_remote_code: bool = False
     use_async_ttft: bool = True
+    # Cap the engine's context window. Required for models declaring a very
+    # large window (Llama-3.1 declares 131072): vLLM otherwise sizes the KV
+    # cache for the full window and fails allocation. Set to
+    # MAX_PROMPT_TOKENS + max_new_tokens, rounded up to a multiple of the
+    # 16-token block size. None leaves the model's declared value.
+    max_model_len: Optional[int] = None
+    # Wrap each prompt as a single user turn and append the assistant turn
+    # marker via the tokenizer's chat template. Without this, a prompt ending
+    # on a complete sentence reads as a finished document and the model emits
+    # EOS immediately instead of answering.
+    apply_chat_template: bool = True
+    # Tokenizer supplying the chat template. Defaults to model_name.
+    tokenizer_path: Optional[str] = None
     warmup_iters: int = 2
     # Reset the prefix cache between cases so each (base, followup) pair is
     # measured against an empty cache. Prevents cross-case contamination, e.g.

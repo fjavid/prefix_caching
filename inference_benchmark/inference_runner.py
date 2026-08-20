@@ -111,8 +111,20 @@ class InferenceRunner:
             output_tokens=followup.output_tokens,
         )
 
+        # Engine-visible overlap: model tokens after chat templating, i.e. what
+        # the prefix cache actually matches on. Recorded here because this is
+        # the only stage with the model's tokenizer loaded; the analysis stage
+        # must stay GPU-free and model-free.
+        case_dict = case.to_dict()
+        token_overlap = self.backend.token_overlap(
+            case.base_prompt, case.followup_prompt
+        )
+        if token_overlap:
+            case_dict['metadata'] = dict(case_dict.get('metadata') or {})
+            case_dict['metadata']['model_token_overlap'] = token_overlap
+
         return CaseRunResult(
-            case=case.to_dict(),
+            case=case_dict,
             base_result=base.to_dict(),
             followup_result=followup.to_dict(),
             base_metrics=base_metrics.to_dict(),

@@ -23,6 +23,13 @@ def load_benchmark_jsonl(path: str) -> pd.DataFrame:
             case = row.get("case", {})
             follow = row.get("followup_metrics", {})
             base_metrics = row.get("base_metrics", {})
+            # Real MODEL-token counts reported by the engine. Distinct from the
+            # overlap analyzer's `*_token*` fields, which count whitespace words
+            # (see prompt_mutation/overlap_analyzer.OverlapMetrics). Carried
+            # through so downstream cost-per-token analysis can use true token
+            # counts instead of reconstructing them from word counts.
+            follow_result = row.get("followup_result", {}) or {}
+            base_result = row.get("base_result", {}) or {}
             # Drop any warmup-tagged entries that may have leaked through.
             if follow.get("phase") == "warmup" or case.get("relation") == "warmup":
                 continue
@@ -31,6 +38,9 @@ def load_benchmark_jsonl(path: str) -> pd.DataFrame:
             validation = metadata.get("validation", {}) or {}
             severity = metadata.get("severity", {}) or {}
             prompt_org = metadata.get("prompt_organization", {}) or {}
+            # Engine-visible overlap in MODEL tokens, recorded by the benchmark
+            # stage. Absent from runs produced before it existed.
+            model_overlap = metadata.get("model_token_overlap", {}) or {}
 
             rows.append({
                 "case_id": case.get("case_id"),
@@ -47,6 +57,12 @@ def load_benchmark_jsonl(path: str) -> pd.DataFrame:
                 "layout_strategy": prompt_org.get("strategy_name", "unknown"),
                 "first_divergence_token": overlap.get("first_divergence_token"),
                 "token_shared_prefix_ratio": overlap.get("token_shared_prefix_ratio"),
+                "followup_prompt_model_tokens": follow_result.get("prompt_tokens"),
+                "base_prompt_model_tokens": base_result.get("prompt_tokens"),
+                "followup_output_model_tokens": follow_result.get("output_tokens"),
+                "first_divergence_model_token": model_overlap.get("first_divergence_model_token"),
+                "shared_prefix_model_token_ratio": model_overlap.get("shared_prefix_model_token_ratio"),
+                "reusable_blocks": model_overlap.get("reusable_blocks"),
                 "sequence_match_ratio": overlap.get("sequence_match_ratio"),
                 "semantic_cosine_overlap": overlap.get("semantic_cosine"),
                 "validation_is_valid": validation.get("is_valid"),
@@ -83,6 +99,12 @@ def merge_cache_on_off(df: pd.DataFrame) -> pd.DataFrame:
         "relation",
         "first_divergence_token",
         "token_shared_prefix_ratio",
+        "followup_prompt_model_tokens",
+        "base_prompt_model_tokens",
+        "followup_output_model_tokens",
+        "first_divergence_model_token",
+        "shared_prefix_model_token_ratio",
+        "reusable_blocks",
         "sequence_match_ratio",
         "semantic_cosine_overlap",
         "validation_is_valid",

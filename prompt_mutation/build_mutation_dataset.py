@@ -152,6 +152,11 @@ def build_dataset(config: BuildConfig) -> Path:
         record.metadata["overlap_metrics"] = overlap_metrics.to_dict()
         record.metadata["validation"] = validation_result.to_dict()
         record.metadata["severity"] = severity_result.to_dict()
+        # Reference-only. Carried so generated output can be scored downstream;
+        # never rendered into base_prompt or mutated_prompt.
+        reference_answers = getattr(ex, "reference_answers", None)
+        if reference_answers:
+            record.metadata["reference_answers"] = list(reference_answers)
         records.append(record)
 
     if not records:
