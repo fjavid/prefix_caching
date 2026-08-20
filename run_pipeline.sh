@@ -89,7 +89,7 @@ build_export_arg() {
   local vars=(PIPELINE_DIR PROJECT_ROOT SCRATCH_ROOT MODEL_TAG MODEL_PATH
               WORKLOAD SEMANTIC_CLASS GENERATION_CLASS MUTATION_TYPE
               STRATEGIES CACHE_MODES USE_ASYNC_TTFT VLLM_LOGGING_LEVEL
-              RESET_CACHE_BETWEEN_CASES)
+              RESET_CACHE_BETWEEN_CASES MAX_CASES)
   local pairs=()
   for v in "${vars[@]}"; do
     # Only export if defined (so unset vars stay unset rather than become "").

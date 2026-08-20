@@ -23,7 +23,9 @@ findings across all mutations into one view:
    `first_divergence_token / token_shared_prefix_ratio` (verified
    identical across the two layouts of the same case). A linear fit's
    slope gives the per-token prefill cost; we compare that to the
-   theoretical "2 x params" forward-pass FLOPs / A100 BF16 peak.
+   theoretical "2 x params" forward-pass FLOPs / GPU BF16 peak. Pass
+   --n-params, --gpu-peak-tflops, --model-label and --gpu-label to match
+   the run; the defaults describe TinyLlama-1.1B on an A100.
 
 4. `report_ttft_on_vs_shared_ratio.png`
    Companion to (3): TTFT (cache on) as a function of the FRACTION of
@@ -192,6 +194,27 @@ def plot_gain_vs_shared_prefix(df: pd.DataFrame, out_path: Path) -> None:
     plt.close(fig)
 
 
+def _length_unit(df: pd.DataFrame) -> str:
+    """Which unit the prompt-length series is in: "model_token" or "word".
+
+    Resolved ONCE from the actual source column, and propagated to every axis
+    label, legend, title, and stdout line so no figure can label a
+    whitespace-word quantity as a model token. The distinction is not cosmetic:
+    words undercount model tokens by a record-dependent factor measured at
+    1.42-2.62, so a per-word slope must never be compared against a
+    per-model-token roofline.
+
+    Mirrors _estimate_total_tokens exactly — the column must be present AND have
+    at least one non-null value, since a schema that carries the column but no
+    data falls back to the reconstruction.
+    """
+    if "followup_prompt_model_tokens" in df.columns and pd.to_numeric(
+        df["followup_prompt_model_tokens"], errors="coerce"
+    ).notna().any():
+        return "model_token"
+    return "word"
+
+
 def _estimate_total_tokens(df: pd.DataFrame) -> pd.Series:
     """Total prompt length per row, in MODEL tokens where available.
 
@@ -230,7 +253,9 @@ def _estimate_total_tokens(df: pd.DataFrame) -> pd.Series:
 def plot_ttft_off_vs_tokens(df: pd.DataFrame, out_path: Path,
                             n_params: float = 1.1e9,
                             gpu_peak_tflops: float = 312.0,
-                            gpu_utilization: float = 0.55) -> None:
+                            gpu_utilization: float = 0.55,
+                            model_label: str = "unknown model",
+                            gpu_label: str = "unknown GPU") -> None:
     """Scatter of ttft_off vs total-prompt-tokens with a linear fit.
 
     The slope of the fit (seconds / token) is the per-token prefill cost.
@@ -240,10 +265,14 @@ def plot_ttft_off_vs_tokens(df: pd.DataFrame, out_path: Path,
         predicted_per_token_seconds = (2 * n_params) / (peak * utilization)
 
     The 2x in the numerator is the standard "forward pass costs ~2 *
-    params FLOPs per token" rule. We use n_params = 1.1e9 for TinyLlama
-    and an A100-SXM4-40GB peak of 312 TFLOPS BF16. Utilization defaults
-    to 0.55, a typical achieved fraction of peak for transformer prefill
-    at this scale.
+    params FLOPs per token" rule.
+
+    n_params, gpu_peak_tflops, model_label, and gpu_label must all describe the
+    run that produced the CSVs. The defaults (1.1e9, 312 TFLOPS for an
+    A100-SXM4-40GB) match TinyLlama-1.1B and are wrong for any other model or
+    device. N_PARAMS is carried per model in the pipeline_config.sh registry;
+    pass it and the matching label explicitly. Utilization defaults to 0.55, a
+    typical achieved fraction of peak for transformer prefill.
     """
     pr = df[df["relation"] == "partial_reuse"].copy()
     pr["total_tokens"] = _estimate_total_tokens(pr)
@@ -273,6 +302,9 @@ def plot_ttft_off_vs_tokens(df: pd.DataFrame, out_path: Path,
         "synonym_substitution": "#17becf",   # cyan
     }
 
+    unit = _length_unit(pr)
+    unit_short = "token" if unit == "model_token" else "word"
+
     fig, ax = plt.subplots(figsize=(9.5, 6))
     for mut, color in mut_colors.items():
         sub = pr[pr["mutation_type"] == mut]
@@ -283,21 +315,43 @@ def plot_ttft_off_vs_tokens(df: pd.DataFrame, out_path: Path,
                    edgecolors="none", label=mut)
     xs = np.linspace(x.min(), x.max(), 64)
     ax.plot(xs, slope * xs + intercept, color="black", lw=2.0,
-            label=(f"linear fit:  slope={slope*1000:.2f} mu_s/token, "
+            label=(f"linear fit:  slope={slope*1000:.2f} mu_s/{unit_short}, "
                    f"intercept={intercept:.2f} ms"))
-    # Show the theoretical line through the same intercept so the comparison is fair.
-    ax.plot(xs, theoretical_per_token_ms * xs + intercept,
-            color="black", lw=1.4, ls="--",
-            label=(f"theoretical:  {theoretical_per_token_ms*1000:.2f} mu_s/token "
-                   f"(2*params / {gpu_peak_tflops:.0f} TFLOPS * {gpu_utilization:.2f})"))
+    # The roofline is a per-MODEL-TOKEN cost. Drawing it against a per-word slope
+    # invites a comparison the units do not support, so it is omitted entirely
+    # rather than shown with a caveat.
+    if unit == "model_token":
+        ax.plot(xs, theoretical_per_token_ms * xs + intercept,
+                color="black", lw=1.4, ls="--",
+                label=(f"theoretical:  {theoretical_per_token_ms*1000:.2f} mu_s/token "
+                       f"(2*params / ({gpu_peak_tflops:.0f} TFLOPS * {gpu_utilization:.2f}))"))
 
-    ax.set_xlabel("total prompt tokens (estimated from first_divergence / shared_prefix_ratio)")
+    # _estimate_total_tokens prefers the engine-reported model-token count and
+    # only falls back to the whitespace-word reconstruction, so the axis label
+    # must reflect which one was actually used.
+    if unit == "model_token":
+        x_label = "total prompt length (model tokens, engine-reported)"
+    else:
+        x_label = ("total prompt length (whitespace words, reconstructed from "
+                   "first_divergence / shared_prefix_ratio)")
+    ax.set_xlabel(x_label)
     ax.set_ylabel("ttft_off  (ms)")
+    # Three lines rather than two: the model and GPU labels are caller-supplied
+    # and can be long enough to run off the figure on one line.
+    if unit == "model_token":
+        headline = (f"measured {slope*1000:.2f} mu_s/token vs predicted "
+                    f"{theoretical_per_token_ms*1000:.2f} mu_s/token")
+        provenance = (f"{model_label} on {gpu_label} @ "
+                      f"{gpu_utilization*100:.0f}% of {gpu_peak_tflops:.0f} TFLOPS")
+    else:
+        headline = (f"measured {slope*1000:.2f} mu_s/WORD — not comparable to a "
+                    f"per-model-token roofline")
+        provenance = ("no engine token counts in this result set; "
+                      "roofline omitted")
     ax.set_title(
-        f"TTFT (cache off) vs prompt length — validates per-token prefill cost\n"
-        f"measured {slope*1000:.2f} mu_s/token vs predicted "
-        f"{theoretical_per_token_ms*1000:.2f} mu_s/token "
-        f"(TinyLlama-1.1B on A100 @ {gpu_utilization*100:.0f}% of {gpu_peak_tflops:.0f} TFLOPS)"
+        f"TTFT (cache off) vs prompt length — per-{unit_short} prefill cost\n"
+        f"{headline}\n{provenance}",
+        fontsize=10,
     )
     ax.legend(fontsize=8, loc="upper left", framealpha=0.9)
     fig.tight_layout()
@@ -305,14 +359,28 @@ def plot_ttft_off_vs_tokens(df: pd.DataFrame, out_path: Path,
     plt.close(fig)
 
     # Also report the numeric comparison on stdout for the writeup.
-    print("\nLinear validation of per-token prefill cost:")
-    print(f"  measured slope     : {slope*1000:6.3f} mu_s/token  (={slope:.6f} ms/tok)")
+    print(f"\nLinear validation of per-{unit_short} prefill cost:")
+    print(f"  measured slope     : {slope*1000:6.3f} mu_s/{unit_short}  (={slope:.6f} ms/{unit_short})")
     print(f"  measured intercept : {intercept:6.3f} ms")
-    print(f"  theoretical slope  : {theoretical_per_token_ms*1000:6.3f} mu_s/token "
-          f"(at {gpu_utilization*100:.0f}% of {gpu_peak_tflops:.0f} TFLOPS, n_params={n_params:.1e})")
-    if theoretical_per_token_ms > 0:
-        print(f"  achieved fraction  : {theoretical_per_token_ms/slope*gpu_utilization*100:5.1f}% of A100 dense peak "
-              "(derived from measured slope; >50% means near-peak utilization).")
+    if unit == "model_token":
+        print(f"  theoretical slope  : {theoretical_per_token_ms*1000:6.3f} mu_s/token "
+              f"(at {gpu_utilization*100:.0f}% of {gpu_peak_tflops:.0f} TFLOPS, "
+              f"n_params={n_params:.1e})")
+        if theoretical_per_token_ms > 0:
+            print(f"  achieved fraction  : "
+                  f"{theoretical_per_token_ms/slope*gpu_utilization*100:5.1f}% "
+                  f"of {gpu_label} dense peak "
+                  "(derived from measured slope; >50% means near-peak utilization).")
+    else:
+        # The roofline is per model token. Printing an "achieved fraction" from a
+        # per-word slope overstates efficiency by the word-to-token ratio
+        # (1.42-2.62 measured), so it is withheld rather than caveated.
+        print("  roofline comparison: WITHHELD — this result set has no engine "
+              "token counts, so the")
+        print("                       slope is per WORD and not comparable to a "
+              "per-model-token peak.")
+        print("                       Re-run the benchmark stage to record "
+              "model_token_overlap.")
 
 
 def plot_ttft_on_vs_shared_ratio(df: pd.DataFrame, out_path: Path) -> None:
@@ -363,8 +431,13 @@ def plot_ttft_on_vs_shared_ratio(df: pd.DataFrame, out_path: Path) -> None:
         c=pr["total_tokens"], cmap="viridis",
         s=18, alpha=0.55, edgecolors="none",
     )
+    unit = _length_unit(pr)
+    unit_short = "token" if unit == "model_token" else "word"
+    unit_long = ("model tokens, engine-reported" if unit == "model_token"
+                 else "whitespace words, reconstructed")
+
     cbar = fig.colorbar(sc, ax=ax)
-    cbar.set_label("total prompt tokens")
+    cbar.set_label(f"total prompt length ({unit_long})")
 
     # Expected curves at p10 and p90 of total_tokens to bracket the band.
     # ttft_on(ratio | N) ~= intercept_on_floor + slope_off * N * (1 - ratio)
@@ -375,18 +448,21 @@ def plot_ttft_on_vs_shared_ratio(df: pd.DataFrame, out_path: Path) -> None:
     if not np.isnan(intercept_on):
         ax.plot(rs, intercept_on + slope_off * n_lo * (1 - rs),
                 color="black", lw=1.4, ls="--",
-                label=f"predicted: total_tokens={n_lo:.0f}  (p10)")
+                label=f"predicted: total={n_lo:.0f} {unit_short}s  (p10)")
         ax.plot(rs, intercept_on + slope_off * n_hi * (1 - rs),
                 color="black", lw=1.4, ls=":",
-                label=f"predicted: total_tokens={n_hi:.0f}  (p90)")
+                label=f"predicted: total={n_hi:.0f} {unit_short}s  (p90)")
 
     ax.set_xlim(-0.02, 1.02)
-    ax.set_xlabel("fraction of prompt cached  (token_shared_prefix_ratio)")
+    # The ratio itself is a whitespace-word ratio regardless of which unit the
+    # length series resolved to; it comes from the overlap analyzer.
+    ax.set_xlabel("fraction of prompt cached  (token_shared_prefix_ratio, "
+                  "whitespace words)")
     ax.set_ylabel("ttft_on  (ms)")
     ax.set_title(
-        "TTFT (cache on) vs fraction of prompt cached, colored by total prompt length\n"
-        f"Two dashed curves: intercept + {slope_off*1000:.1f} mu_s/token * "
-        f"total_tokens * (1 - ratio) at p10/p90 of total_tokens"
+        f"TTFT (cache on) vs fraction of prompt cached, colored by prompt length\n"
+        f"Two dashed curves: intercept + {slope_off*1000:.1f} mu_s/{unit_short} * "
+        f"total * (1 - ratio) at p10/p90 of total ({unit_long})"
     )
     ax.legend(fontsize=9, loc="upper right", framealpha=0.9)
     fig.tight_layout()
@@ -395,7 +471,7 @@ def plot_ttft_on_vs_shared_ratio(df: pd.DataFrame, out_path: Path) -> None:
 
     print("\nTTFT_on vs cache fraction:")
     print(f"  expected: ttft_on(ratio) = intercept + slope_off * N * (1 - ratio)")
-    print(f"  slope_off = {slope_off*1000:.3f} mu_s/token (from cache-off plot 3)")
+    print(f"  slope_off = {slope_off*1000:.3f} mu_s/{unit_short} (from cache-off plot 3)")
     print(f"  intercept_on (at ratio ~= 1) = {intercept_on:.2f} ms")
     print("  Spread in y at fixed ratio is driven by prompt-length variation (p10..p90 band shown).")
 
@@ -415,9 +491,28 @@ def plot_ttft_gain_vs_first_divergence(df: pd.DataFrame, out_path: Path) -> None
     So we expect a tight straight line through the origin (modulo a
     small intercept_off - intercept_on offset), slope equal to the
     per-token prefill cost from plot 3.
+
+    Uses first_divergence_model_token when the benchmark stage recorded it, and
+    otherwise falls back to the whitespace-word first_divergence_token with the
+    axis and slope labelled as words. Comparing a per-word slope against plot 3's
+    per-model-token slope is only valid when both resolved to the same unit.
     """
     pr = df[df["relation"] == "partial_reuse"].copy()
-    pr["first_div"] = pd.to_numeric(pr["first_divergence_token"], errors="coerce")
+    # Prefer the engine-visible MODEL-token divergence recorded by the benchmark
+    # stage. first_divergence_token counts whitespace words on the raw prompt, so
+    # calling it "cached tokens" is wrong by a record-dependent factor of
+    # 1.42-2.62. Fall back to it only when the model-token column is unavailable,
+    # and say so in the labels.
+    if "first_divergence_model_token" in pr.columns and pd.to_numeric(
+        pr["first_divergence_model_token"], errors="coerce"
+    ).notna().any():
+        div_col, unit_short = "first_divergence_model_token", "token"
+        div_label = "first divergence (model tokens, as sent to the engine)"
+    else:
+        div_col, unit_short = "first_divergence_token", "word"
+        div_label = ("first divergence (whitespace words, raw prompt — NOT "
+                     "cached model tokens)")
+    pr["first_div"] = pd.to_numeric(pr[div_col], errors="coerce")
     pr["gain_ms"] = pd.to_numeric(pr["ttft_gain_seconds"], errors="coerce") * 1000.0
     pr = pr.dropna(subset=["first_div", "gain_ms"])
     if pr.empty:
@@ -445,20 +540,20 @@ def plot_ttft_gain_vs_first_divergence(df: pd.DataFrame, out_path: Path) -> None
                    edgecolors="none", label=mut)
     xs = np.linspace(x.min(), x.max(), 64)
     ax.plot(xs, slope * xs + intercept, color="black", lw=2.0,
-            label=(f"linear fit:  slope={slope*1000:.2f} mu_s/cached_token, "
+            label=(f"linear fit:  slope={slope*1000:.2f} mu_s/cached_{unit_short}, "
                    f"intercept={intercept:.2f} ms"))
     ax.axhline(0, color="black", lw=0.4)
 
-    ax.set_xlabel("first_divergence_token  (= number of cached tokens)")
+    ax.set_xlabel(div_label)
     ax.set_ylabel("ttft_gain_seconds  (ms)")
-    ax.set_title("TTFT gain vs cached tokens")
+    ax.set_title(f"TTFT gain vs cached prefix length ({unit_short}s)")
     ax.legend(fontsize=9, loc="upper left", framealpha=0.9)
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
-    print("\nTTFT_gain vs first_divergence_token:")
-    print(f"  measured slope     : {slope*1000:6.3f} mu_s/cached_token")
+    print(f"\nTTFT_gain vs {div_col}:")
+    print(f"  measured slope     : {slope*1000:6.3f} mu_s/cached_{unit_short}")
     print(f"  measured intercept : {intercept:6.3f} ms")
     print(f"  Compare slope to plot-3 cache-off slope. Same number = clean cache substitution.")
 
@@ -470,15 +565,41 @@ def main() -> None:
     p.add_argument("--output-dir", default="outputs/analysis/report",
                    help="Where to write report figures.")
     p.add_argument("--n-params", type=float, default=1.1e9,
-                   help="Model parameter count for the validation plot.")
+                   help="Model parameter count for the roofline comparison. Must "
+                        "match the model that produced the results: 1.1e9 for "
+                        "TinyLlama-1.1B (default), 8.0e9 for Llama-3.1-8B. The "
+                        "registry in pipeline_config.sh carries this as N_PARAMS.")
+    p.add_argument("--model-label", default=None,
+                   help="Model name for figure captions, e.g. Llama-3.1-8B-Instruct. "
+                        "Defaults to a description derived from --n-params, so a "
+                        "caption can never silently name the wrong model.")
     p.add_argument("--gpu-peak-tflops", type=float, default=312.0,
                    help="GPU peak BF16/FP16 tensor-core throughput in TFLOPS. "
-                        "Default 312 is A100-SXM4-40GB dense peak.")
+                        "Default 312 is A100-SXM4-40GB dense peak. An H100 SXM is "
+                        "~990; pass the value for the device the job actually ran on.")
+    p.add_argument("--gpu-label", default=None,
+                   help="GPU name for figure captions, e.g. H100. Defaults to a "
+                        "description derived from --gpu-peak-tflops.")
     p.add_argument("--gpu-utilization", type=float, default=0.55,
                    help="Achieved fraction of peak (0-1). 0.55 is a typical "
                         "transformer-prefill number; bump if you see your GPU "
                         "running hotter on similar workloads.")
     args = p.parse_args()
+
+    # Identity and the numbers used by the roofline are separate inputs, so a
+    # caller CAN pass a label that disagrees with the values. Rather than trust
+    # the label, always render it together with the value it is claimed to
+    # describe: "TinyLlama-1.1B (8.0e+09 params)" makes a mismatch visible in
+    # the figure instead of hiding it. With no label, the value alone is shown,
+    # which is uninformative but never false.
+    #
+    # The CSVs carry no model or device identity, so this is the strongest
+    # guarantee available here: a figure cannot assert a model without also
+    # showing the parameter count the roofline was computed from.
+    model_label = (f"{args.model_label} ({args.n_params:.1e} params)"
+                   if args.model_label else f"{args.n_params:.1e} params")
+    gpu_label = (f"{args.gpu_label} ({args.gpu_peak_tflops:.0f} TFLOPS)"
+                 if args.gpu_label else f"{args.gpu_peak_tflops:.0f} TFLOPS device")
 
     analysis_dir = Path(args.analysis_dir)
     out_dir = Path(args.output_dir)
@@ -500,6 +621,8 @@ def main() -> None:
         n_params=args.n_params,
         gpu_peak_tflops=args.gpu_peak_tflops,
         gpu_utilization=args.gpu_utilization,
+        model_label=model_label,
+        gpu_label=gpu_label,
     )
     plot_ttft_on_vs_shared_ratio(
         df, out_dir / "report_ttft_on_vs_shared_ratio.png",

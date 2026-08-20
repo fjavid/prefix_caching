@@ -168,7 +168,7 @@ Review notes:
 
 ### Batch 5: Analysis roofline parameterization
 
-Status: pending
+Status: done
 
 Scope:
 - `analysis/plot_report.py` takes the parameter count from the caller rather
@@ -196,7 +196,7 @@ Review notes:
 
 ### Batch 6: Runbook and configuration documentation
 
-Status: pending
+Status: done
 
 Scope:
 - `RUNBOOK.md`: rewrite the staging, data-prep, and submission sections for the
@@ -356,8 +356,46 @@ Review notes:
   **Open operational risk:** `SBATCH_GRES=gpu:1` does not guarantee a device with
   the >= 40 GB that R6 requires. On a heterogeneous GPU pool the 8B job can be
   allocated an undersized device and fail at engine startup. Set a typed request
-  (e.g. `SBATCH_GRES=gpu:a100:1`) for the cluster in use. Record this in
+  (e.g. `SBATCH_GRES=gpu:a100:1`) for the cluster in use. Recorded in
   `RUNBOOK.md` during Batch 6.
+- **Batches 5 and 6** — reviewed together by Codex, NOT approved, four blocking
+  issues. Report: `TASKS/handoffs/2026-08-20-codex-review-model-scale-batch56.md`.
+  All four confirmed and fixed:
+  1. *Unit incoherence.* Batch 5 fixed only the x-axis label; the title, legend,
+     stdout, and roofline still called a whitespace-word slope `mu_s/token` and
+     compared it against a per-model-token peak. Plots 4 and 5 repeated it, and
+     plot 5 used the word-based `first_divergence_token` while calling it cached
+     tokens despite `first_divergence_model_token` now existing. Fixed with a
+     single `_length_unit()` resolver threaded through all three plots; the
+     theoretical line and achieved-peak figure are now WITHHELD when the unit is
+     words rather than shown with a caveat. The theoretical legend text also
+     disagreed with the computation (`2*params / peak * utilization` vs
+     `2*params / (peak * utilization)`) and was corrected.
+  2. *Identity decoupled from values.* `--model-label` and `--n-params` were
+     independent, so a figure could name TinyLlama while computing an 8B
+     roofline. Labels are now always rendered with the value they claim —
+     `Llama-3.1-8B-Instruct (8.0e+09 params)` — making a mismatch visible.
+  3. *Documented commands did not bind `MODEL_TAG`.* Worse than the original
+     defect: `ROOT=$SCRATCH/prefix_caching/$MODEL_TAG` with the variable unset
+     collapses to the legacy pre-namespacing path the surrounding text warns
+     about. Bound in every command across all four documents.
+  4. *The timing table was withdrawn, not annotated.* Codex found the request
+     count understated by 2x: `submit_interface_benchmark.sh` loops over both
+     cache modes and each invocation sweeps both layouts, so a job issues
+     `2 x 2 x 2 = 8` requests per case, not 4. Combined with the artifact-derived
+     source measurements, the table produced an actionable recommendation from
+     invalid data. Replaced with the measurement procedure and the formula.
+
+  Also fixed, beyond the review's scope: the pilot command written into
+  `RUNBOOK.md` did not work. `--max-cases` existed in the Python CLI but nothing
+  wired it from the shell, so Batch 8 had no way to run a small pilot without
+  rewriting the shared processed example set. `MAX_CASES` is now plumbed through
+  `pipeline_config.sh` -> the `run_pipeline.sh` child-job export ->
+  `submit_interface_benchmark.sh`, passed only when non-empty.
+
+  Verified all three token-source states (engine column populated, absent, and
+  present-but-all-null): unit, axis, legend, title, and stdout agree in each, and
+  all five figures render in both modes.
 
 ## Final acceptance criteria
 

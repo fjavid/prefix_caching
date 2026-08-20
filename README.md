@@ -40,6 +40,10 @@ Generate a small RAG mutation dataset from a Hugging Face dataset
 (uses a pre-prepared examples file built by `prepare_data.sh`):
 
 ```bash
+# MODEL_TAG selects the model and its artifact namespace; unset, the path below
+# collapses to the legacy pre-namespacing location.
+export MODEL_TAG=Llama-3.1-8B-Instruct
+
 python -m prompt_mutation.build_mutation_dataset \
   --workload rag \
   --load-processed-path $SCRATCH/prefix_caching/$MODEL_TAG/processed/rag_examples.jsonl \
@@ -56,7 +60,7 @@ python test_validation_severity.py \
 ```
 
 ## Outputs
-Generated datasets are stored under `outputs/mutation/<workload>/<semantic_class>/<generation_class>/<mutation_type>/` (local runs). On AllianceCanada, use `$SCRATCH/prefix_caching/mutation/...` via the SLURM pipeline scripts.
+Generated datasets are stored under `outputs/mutation/<workload>/<semantic_class>/<generation_class>/<mutation_type>/` (local runs). On AllianceCanada, artifacts are namespaced by model: `$SCRATCH/prefix_caching/$MODEL_TAG/mutation/...`, written via the SLURM pipeline scripts. `MODEL_TAG` selects the model and its artifact namespace — see `RUNBOOK.md`.
 Each record contains:
 - the base prompt
 - the mutated prompt

@@ -108,10 +108,18 @@ for cache_mode in $RUN_CACHE_MODES; do
   run_name_template="${TAG}_{layout}_cache_${cache_mode}"
   echo "=== cache=$cache_mode  layouts=[$RUN_STRATEGIES]  template=$run_name_template ==="
 
+  # Only pass --max-cases when MAX_CASES is non-empty; the flag's own default of
+  # None means "all cases", and passing an empty string would be a parse error.
+  max_cases_flag=()
+  if [[ -n "${MAX_CASES:-}" ]]; then
+    max_cases_flag=(--max-cases "$MAX_CASES")
+  fi
+
   python -m inference_benchmark.benchmark_prefix_cache \
     --backend-name vllm \
     --model-name "$MODEL_PATH" \
     --max-model-len "$MAX_MODEL_LEN" \
+    ${max_cases_flag[@]+"${max_cases_flag[@]}"} \
     $cache_flag \
     $async_flag \
     $reset_flag \

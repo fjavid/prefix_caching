@@ -35,12 +35,21 @@ the `prompt_mutation/` pipeline.
 
 ## Example
 
-Cache OFF: one engine sweeping `original` and `stable_first`:
+On the cluster, go through `run_pipeline.sh` — it resolves the model registry and
+passes `--max-model-len` plus the per-model SLURM resources. See `RUNBOOK.md`.
+
+The direct form, for local debugging. Cache OFF, one engine sweeping `original`
+and `stable_first`:
 
 ```bash
+# Both must be set; neither has a default in this shell.
+export PROJECT_ROOT=$HOME/work/prefix_caching
+export MODEL_TAG=Llama-3.1-8B-Instruct
+
 python -m inference_benchmark.benchmark_prefix_cache \
   --backend-name vllm \
-  --model-name TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+  --model-name "$PROJECT_ROOT/models/$MODEL_TAG" \
+  --max-model-len 2048 \
   --disable-prefix-caching \
   --layouts        original                                   stable_first \
   --mutation-jsonls outputs/prompt_organization/rag_chunk_reorder_original.jsonl \
@@ -51,6 +60,11 @@ python -m inference_benchmark.benchmark_prefix_cache \
 
 Cache ON: identical command with `--enable-prefix-caching` and
 `_cache_on` in the template. Each run produces one JSONL per layout.
+
+`--max-model-len` is not optional for a model that declares a large context
+window: Llama-3.1 declares 131072, and without the cap vLLM sizes the KV cache
+for the full window and fails allocation on a 40 GB device. `pipeline_config.sh`
+carries the right value per model as `MAX_MODEL_LEN`.
 
 ## Notes
 

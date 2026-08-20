@@ -19,6 +19,8 @@
 #   MUTATION_TYPE   - e.g. chunk_reorder, field_reorder, parameter_change, ...
 #   STRATEGIES      - space-separated layout names (original stable_first volatile_last)
 #   CACHE_MODES     - space-separated; subset of "off on"
+#   MAX_CASES       - cap benchmark cases per run; empty means all. Use for the
+#                     pilot that measures per-case cost before a full sweep.
 #
 # Login-node-only knobs (consumed by prepare_data.sh):
 #   MAX_CHUNK_WORDS   - per-chunk word cap during extraction (default 200)
@@ -53,10 +55,12 @@
 # context cap, and the $SCRATCH_ROOT artifact namespace.
 #
 # MAX_MODEL_LEN is deliberately NOT the model's declared context window. The
-# required window is MAX_PROMPT_TOKENS + max_new_tokens (1800 + 64 = 1864), and
-# the largest prompt observed in practice was 1615 tokens. Llama-3.1 declares
-# 131072; without the cap vLLM sizes the KV cache for the full window and fails
-# allocation on a 40 GB device.
+# required window is MAX_PROMPT_TOKENS + chat-template overhead + max_new_tokens
+# = 1800 + 15 + 64 = 1879, where 15 is the measured full-template overhead for
+# TinyLlama-1.1B (leading role markers plus the trailing </s> and assistant
+# marker). The longest templated prompt observed was 1554 tokens. Llama-3.1
+# declares 131072; without the cap vLLM sizes the KV cache for the full window
+# and fails allocation on a 40 GB device.
 #
 # To add a model: add a case arm and stage the weights with
 #   MODEL_TAG=<tag> bash prep_login.sh
@@ -111,6 +115,11 @@ esac
 : "${SEMANTIC_CLASS:=meaning_preserving}"
 : "${GENERATION_CLASS:=algorithmic}"
 : "${MUTATION_TYPE:=chunk_reorder}"
+
+# Cap the number of benchmark cases per run. Unset means all of them. Required
+# for the pilot: a small run measures per-case cost without committing to a full
+# sweep, and without rewriting the shared processed example set.
+: "${MAX_CASES:=}"
 
 : "${STRATEGIES:=original stable_first}"
 : "${CACHE_MODES:=off on}"
