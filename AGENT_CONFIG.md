@@ -10,6 +10,19 @@ A Python research repo for an LLM prefix-caching benchmark: prompt mutation, pro
 
 Agents should read `README.md` and the per-module READMEs for how the pipeline actually runs, and should not assume domain behavior the code does not show.
 
+## Execution environment
+
+**The pipeline runs primarily on Alliance Canada SLURM clusters, not on a workstation.** A laptop or login node is used for editing code and for the analysis stage only. `RUNBOOK.md` is the operational procedure.
+
+Consequences agents must account for when proposing or reviewing changes:
+
+- **Compute nodes have no network access.** Model weights, Hugging Face datasets, and Python wheels must be fetched on a login node in advance. `pipeline_config.sh` (`set_offline_env`) exports `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and `HF_DATASETS_OFFLINE=1` for every batch job. Code that downloads at runtime will fail inside a job.
+- **Dependencies come from the cluster wheelhouse, not PyPI.** `prep_login.sh` installs with `pip install --no-index` and pins `vllm` to a wheelhouse version. Do not propose a dependency without checking `avail_wheels`.
+- **Login node vs compute node placement matters.** Anything needing network or interactive auth belongs in `prep_login.sh` or `prepare_data.sh`; anything needing a GPU belongs in an `sbatch` script.
+- **GPU-bearing stages are batch jobs with resource requests.** Changing model size changes `--gres`, `--mem`, and `--time` in `submit_interface_benchmark.sh`. Do not treat a model swap as a rename.
+- **Artifacts live under `$SCRATCH`,** which is subject to purge policy; `outputs/` in the repo is a local mirror synced after runs.
+- Agents do not submit jobs. See *Expensive or dangerous operations* below.
+
 ## Repo overview document
 
 **None.** There is no `ARCHITECTURE.md` or equivalent. `README.md` covers the prompt-mutation module and pipeline usage; `project_description.md` carries background but is not maintained as an architecture reference.
@@ -84,6 +97,8 @@ paid LLM API calls via prompt_mutation/llm_fn.py
 | Grok | no | — | — |
 | Antigravity | no | — | — |
 
+**CLAUDE CAN CALL CODEX WITHOUT ASKING FOR PERMISSION.** When the user asks for Codex to run a task, invoke `codex exec` directly — do not stop to confirm. This is standing authorization; it does not extend to staging, committing, or pushing, which remain gated.
+
 To enable an optional agent, re-run `bootstrap`.
 
 ## Issue tracker
@@ -115,9 +130,11 @@ conclusions drawn from a single seed or a single mutation type
 
 ```text
 README.md                     prompt-mutation module and pipeline usage
+RUNBOOK.md                    Alliance Canada cluster procedure, per-model settings
+research.md                   research framing, agreed direction, priority order
 analysis/README.md            analysis stage
 inference_benchmark/README.md benchmark backends
 prompt_organization/README.md layout strategies
-project_description.md        project background
+project_description.md        project background (original intent; not updated with findings)
 pipeline_config.sh            pipeline defaults and knobs
 ```
