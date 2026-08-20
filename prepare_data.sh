@@ -5,11 +5,16 @@
 # Idempotent: re-running just rewrites the processed JSONL.
 #
 # Overridable env vars:
-#   DATASET_NAME, SPLIT, MAX_SAMPLES, MIN_CHUNKS, MAX_CHUNKS
+#   DATASET_NAME, SPLIT, MAX_SAMPLES, MIN_CHUNKS, MAX_CHUNKS, MAX_CHUNK_WORDS
+#   TOKENIZER_PATH, MAX_PROMPT_TOKENS  (both default from the MODEL_TAG registry)
 #   PROJECT_ROOT, SCRATCH_ROOT
+#
+# The output path is namespaced by MODEL_TAG, so each model keeps its own example
+# set filtered with its own tokenizer.
 #
 # Usage (login node):
 #   bash prepare_data.sh
+#   MODEL_TAG=Llama-3.1-8B-Instruct bash prepare_data.sh
 #   DATASET_NAME=hotpot_qa SPLIT='train[:500]' MAX_SAMPLES=500 bash prepare_data.sh
 
 set -euo pipefail
@@ -36,21 +41,36 @@ SPLIT="${SPLIT:-train[:1000]}"
 MAX_SAMPLES="${MAX_SAMPLES:-1000}"
 MIN_CHUNKS="${MIN_CHUNKS:-3}"
 MAX_CHUNKS="${MAX_CHUNKS:-4}"
-# Context-budget controls. Defaults are sized for TinyLlama-1.1B (2048-token window)
-# with max_new_tokens=64 and a small margin for layout-strategy header overhead.
+# Context-budget controls.
+#
+# MAX_PROMPT_TOKENS is NOT defaulted here: pipeline_config.sh resolves it from
+# the MODEL_TAG registry, already honouring an explicit export. Re-defaulting it
+# in this file would create a second source of truth that silently disagrees
+# with the value the benchmark stage uses for --max-model-len.
+#
+# TOKENIZER_PATH follows MODEL_PATH, which is registry-derived, so the filter
+# tokenizes with the same model that will later serve the prompts. Two models
+# therefore keep independent example sets: a 128k-vocab tokenizer encodes the
+# same text in fewer tokens than a 32k-vocab one, so a different subset of
+# examples survives the budget. That is intended; the sets are not comparable
+# across models.
 MAX_CHUNK_WORDS="${MAX_CHUNK_WORDS:-200}"
 TOKENIZER_PATH="${TOKENIZER_PATH:-$MODEL_PATH}"
-MAX_PROMPT_TOKENS="${MAX_PROMPT_TOKENS:-1800}"
 
 mkdir -p "$PROCESSED_DIR"
 cd "$PROJECT_ROOT"
 
 OUTPUT_PATH="$PROCESSED_DIR/${WORKLOAD}_examples.jsonl"
 
+# The provenance lines matter: the processed JSONL carries no record of which
+# tokenizer or budget produced it, so this output is the only way to attribute a
+# stale file to a model.
 echo "Preparing $WORKLOAD data:"
+echo "  model_tag=$MODEL_TAG"
+echo "  tokenizer=$TOKENIZER_PATH"
+echo "  max_prompt_tokens=$MAX_PROMPT_TOKENS  (max_model_len=$MAX_MODEL_LEN)"
 echo "  dataset=$DATASET_NAME  split=$SPLIT  max_samples=$MAX_SAMPLES"
 echo "  min_chunks=$MIN_CHUNKS  max_chunks=$MAX_CHUNKS  max_chunk_words=$MAX_CHUNK_WORDS"
-echo "  tokenizer=$TOKENIZER_PATH  max_prompt_tokens=$MAX_PROMPT_TOKENS"
 echo "  output=$OUTPUT_PATH"
 
 python -m prompt_mutation.prepare_rag_data \

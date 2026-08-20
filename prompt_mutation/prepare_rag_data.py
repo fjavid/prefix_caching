@@ -6,10 +6,41 @@ offline by SLURM jobs via --load-processed-path.
 Two safety mechanisms keep prompts under the model's context window:
 1. --max-chunk-words: per-chunk word cap applied in data_loader.
 2. --max-prompt-tokens + --tokenizer-path: after distractor padding, render each
-   prompt and drop any whose tokenization exceeds the budget. Use this to match
-   the model's actual context (e.g. 2048 for TinyLlama-1.1B).
+   prompt and drop any whose tokenization exceeds the budget.
 
-Usage (login node, after activating .venv):
+The budget is counted on the UNTEMPLATED prompt, but the engine sees the prompt
+after the chat template is applied. So the constraint the context cap must
+satisfy is:
+
+    max_model_len >= max_prompt_tokens + chat_template_overhead + max_new_tokens
+
+Current registry values leave adequate margin: 1800 + 15 + 64 = 1879 against
+max_model_len 2048, a margin of 169 tokens. 15 is the measured TinyLlama-1.1B
+overhead for the FULL template — the leading role markers plus the trailing
+`</s>` and assistant marker. Up to 184 tokens of overhead fit before the cap
+binds.
+
+Do not confuse this with the +6 figure in
+inference_benchmark/backend_base.py:format_prompt. That is the leading header
+alone, which is what shifts the first-divergence position; the total token cost
+of templating is larger because of the suffix.
+
+Any raise to max_prompt_tokens must budget for the template, so setting it to
+`max_model_len - max_new_tokens` would overflow.
+
+Values come from the MODEL_TAG registry in pipeline_config.sh; prefer invoking
+this through prepare_data.sh rather than passing them by hand — the
+--max-prompt-tokens default below is a second default that only applies to
+direct invocation and can drift from the registry.
+
+The tokenizer must be the one that will serve the prompts. Vocabulary size
+changes how the same text tokenizes, so a different subset of examples survives
+the budget per model, and each model keeps its own processed example set.
+
+Usage (login node) — normally via prepare_data.sh, which fills these in:
+    MODEL_TAG=Llama-3.1-8B-Instruct bash prepare_data.sh
+
+Direct invocation:
     python -m prompt_mutation.prepare_rag_data \\
         --dataset-name LLukas22/nq-simplified \\
         --split "train[:1000]" \\
@@ -17,9 +48,9 @@ Usage (login node, after activating .venv):
         --min-chunks 3 \\
         --max-chunks 4 \\
         --max-chunk-words 200 \\
-        --tokenizer-path $HOME/work/prefix_caching/models/TinyLlama-1.1B-Chat-v1.0 \\
+        --tokenizer-path $HOME/work/prefix_caching/models/$MODEL_TAG \\
         --max-prompt-tokens 1800 \\
-        --output-path $SCRATCH/prefix_caching/processed/rag_examples.jsonl
+        --output-path $SCRATCH/prefix_caching/$MODEL_TAG/processed/rag_examples.jsonl
 """
 
 from __future__ import annotations

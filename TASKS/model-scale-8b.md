@@ -68,7 +68,7 @@ Review notes:
 
 ### Batch 2: Model-parameterized staging in prep_login.sh
 
-Status: in_progress (implemented, awaiting review)
+Status: done
 
 Scope:
 - Replace the hardcoded TinyLlama download (`prep_login.sh:39-43`) with staging
@@ -103,7 +103,7 @@ Review notes:
 
 ### Batch 3: Per-model prompt budget in prepare_data.sh
 
-Status: pending
+Status: done
 
 Scope:
 - `prepare_data.sh` takes `TOKENIZER_PATH` and `MAX_PROMPT_TOKENS` from the
@@ -314,6 +314,24 @@ Review notes:
   Codex judged the repeated venv/install/pre-cache on a second staging run to
   be an operational optimization rather than a Batch 2 defect; recorded as an
   open item rather than fixed here.
+- **Batch 3** — reviewed by Codex, approved, R4 met, no blocking issues. Report:
+  `TASKS/handoffs/2026-08-19-codex-review-model-scale-batch3.md`. Verified that
+  deleting the duplicate `MAX_PROMPT_TOKENS` default leaves it bound on every
+  path, including the `prep_login.sh` parent-to-child boundary and when exported
+  empty.
+  Two non-blocking findings were fixed: the chat-template overhead is **15**
+  tokens, not the 6 quoted in the review and in the earlier implementation note
+  (6 is the leading header alone, which is what shifts the divergence position;
+  15 includes the trailing `</s>` and assistant marker), giving a margin of 169
+  against `max_model_len=2048`; and `README.md:45` documented the
+  pre-namespacing processed path, which would silently load another model's
+  example set.
+  Deferred: `RUNBOOK.md:49` carries the same legacy path (Batch 6); provenance
+  is stdout-only, so an explicit override or registry change can leave an
+  unattributable same-namespace processed file — a sidecar manifest is a new
+  requirement, not a Batch 3 repair; and
+  `prompt_mutation/prepare_rag_data.py:71` keeps a second `1800` default that
+  applies only to direct invocation.
 
 ## Final acceptance criteria
 

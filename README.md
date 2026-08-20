@@ -42,7 +42,7 @@ Generate a small RAG mutation dataset from a Hugging Face dataset
 ```bash
 python -m prompt_mutation.build_mutation_dataset \
   --workload rag \
-  --load-processed-path $SCRATCH/prefix_caching/processed/rag_examples.jsonl \
+  --load-processed-path $SCRATCH/prefix_caching/$MODEL_TAG/processed/rag_examples.jsonl \
   --semantic-class meaning_preserving \
   --generation-class algorithmic \
   --mutation-type chunk_reorder
